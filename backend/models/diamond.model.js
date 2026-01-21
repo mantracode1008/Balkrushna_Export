@@ -1,0 +1,121 @@
+module.exports = (sequelize, Sequelize) => {
+    // Add new columns for Direct Sale / Buyer Info
+    const DiamondModel = sequelize.define("diamond", {
+        certificate: {
+            type: Sequelize.STRING,
+            allowNull: false
+        },
+        certificate_date: {
+            type: Sequelize.STRING
+        },
+        description: {
+            type: Sequelize.STRING
+        },
+        shape: {
+            type: Sequelize.STRING
+        },
+        S_code: {
+            type: Sequelize.STRING
+        },
+        measurements: {
+            type: Sequelize.STRING
+        },
+        carat: {
+            type: Sequelize.DECIMAL(10, 2)
+        },
+        color: {
+            type: Sequelize.STRING
+        },
+        color_code: {
+            type: Sequelize.INTEGER
+        },
+        clarity: {
+            type: Sequelize.STRING
+        },
+        clarity_code: {
+            type: Sequelize.STRING
+        },
+        cut: {
+            type: Sequelize.STRING
+        },
+        lab: {
+            type: Sequelize.STRING
+        },
+        polish: {
+            type: Sequelize.STRING
+        },
+        symmetry: {
+            type: Sequelize.STRING
+        },
+        fluorescence: {
+            type: Sequelize.STRING
+        },
+        crown_height: {
+            type: Sequelize.STRING
+        },
+        pavilion_depth: {
+            type: Sequelize.STRING
+        },
+        girdle_thickness: {
+            type: Sequelize.STRING
+        },
+        culet: {
+            type: Sequelize.STRING
+        },
+        total_depth_percent: {
+            type: Sequelize.STRING
+        },
+        table_percent: {
+            type: Sequelize.STRING
+        },
+        comments: {
+            type: Sequelize.TEXT
+        },
+        inscription: {
+            type: Sequelize.STRING
+        },
+        price: { // Cost Price
+            type: Sequelize.DECIMAL(10, 2),
+            allowNull: false
+        },
+        quantity: {
+            type: Sequelize.INTEGER,
+            defaultValue: 1
+        },
+        discount: {
+            type: Sequelize.DECIMAL(10, 2),
+            defaultValue: 0.00
+        },
+        status: {
+            type: Sequelize.ENUM('in_stock', 'sold', 'in_cart'),
+            defaultValue: 'in_stock'
+        },
+        // New Fields for Combined Buy/Sale & Diamond Type
+        diamond_type: {
+            type: Sequelize.STRING
+        },
+        buyer_name: {
+            type: Sequelize.STRING
+        },
+        buyer_country: {
+            type: Sequelize.STRING
+        },
+        buyer_mobile: {
+            type: Sequelize.STRING
+        },
+        sale_price: { // Actual Selling Price
+            type: Sequelize.DECIMAL(10, 2)
+        },
+        growth_process: {
+            type: Sequelize.STRING
+        },
+        report_url: {
+            type: Sequelize.STRING
+        },
+        seller_country: {
+            type: Sequelize.STRING
+        }
+    });
+
+    return DiamondModel;
+};
