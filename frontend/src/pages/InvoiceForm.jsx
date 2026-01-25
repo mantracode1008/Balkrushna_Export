@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import invoiceService from '../services/invoice.service';
 import diamondService from '../services/diamond.service';
 import { Plus, Trash2, Search, ArrowLeft, Check } from 'lucide-react';
 
 const InvoiceForm = () => {
     const navigate = useNavigate();
-    const location = useLocation(); // To possibly get pre-selected diamond from "Mark as Sold" redirect
 
     // Form State
     const [customerName, setCustomerName] = useState('');
@@ -100,19 +99,19 @@ const InvoiceForm = () => {
     const totalProfit = selectedDiamonds.reduce((sum, d) => sum + ((parseFloat(d.finalSalePrice) || 0) - (parseFloat(d.price) || 0)), 0);
 
     return (
-        <div className="max-w-5xl mx-auto p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-xl min-h-[calc(100vh-100px)] animate-in slide-in-from-bottom-4">
+        <div className="max-w-5xl mx-auto p-6 bg-white  rounded-2xl shadow-xl min-h-[calc(100vh-100px)] animate-in slide-in-from-bottom-4">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8 border-b border-slate-100 dark:border-slate-700 pb-4">
+            <div className="flex items-center justify-between mb-8 border-b border-slate-100  pb-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/invoices')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors">
+                    <button onClick={() => navigate('/invoices')} className="p-2 hover:bg-slate-100  rounded-full transition-colors">
                         <ArrowLeft className="w-6 h-6 text-slate-500" />
                     </button>
-                    <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">New Invoice</h1>
+                    <h1 className="text-2xl font-bold text-slate-800 ">New Invoice</h1>
                 </div>
                 <button
                     onClick={handleSubmit}
                     disabled={loading}
-                    className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200 dark:shadow-blue-900/20 hover:bg-blue-700 transition-all flex items-center gap-2"
+                    className="px-8 py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-200  hover:bg-blue-700 transition-all flex items-center gap-2"
                 >
                     {loading ? 'Processing...' : 'Generate Invoice'}
                     {!loading && <Check className="w-5 h-5" />}
@@ -120,13 +119,13 @@ const InvoiceForm = () => {
             </div>
 
             {/* Customer Details */}
-            <div className="bg-slate-50 dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-700 mb-8">
+            <div className="bg-slate-50  p-6 rounded-xl border border-slate-200  mb-8">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">Bill To</label>
                 <input
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full text-xl font-bold bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition-colors"
+                    className="w-full text-xl font-bold bg-white  border-2 border-slate-200  rounded-lg px-4 py-3 focus:border-blue-500 outline-none transition-colors"
                     placeholder="Enter Customer / Company Name"
                     autoFocus
                 />
@@ -141,31 +140,32 @@ const InvoiceForm = () => {
                         onChange={(e) => setSearchTerm(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                         placeholder="Search Diamond by Certificate..."
-                        className="w-full pl-12 pr-4 py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm outline-none focus:ring-2 focus:ring-blue-500/20 text-lg"
+                        className="w-full pl-12 pr-4 py-4 bg-white  border border-slate-200  rounded-xl shadow-sm outline-none focus:ring-2 focus:ring-blue-500/20 text-lg"
                     />
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                     <button
                         onClick={handleSearch}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800"
+                        disabled={searchLoading}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50"
                     >
-                        Add
+                        {searchLoading ? '...' : 'Add'}
                     </button>
 
                     {/* Dropdown Results */}
                     {searchResults.length > 0 && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-700 z-50 max-h-60 overflow-y-auto">
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-white  rounded-xl shadow-2xl border border-slate-100  z-50 max-h-60 overflow-y-auto">
                             {searchResults.map(d => (
                                 <div
                                     key={d.id}
                                     onClick={() => addDiamond(d)}
-                                    className="p-3 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-50 dark:border-slate-700/50 flex justify-between items-center"
+                                    className="p-3 hover:bg-blue-50  cursor-pointer border-b border-slate-50  flex justify-between items-center"
                                 >
                                     <div>
-                                        <span className="font-bold text-slate-800 dark:text-slate-200">{d.certificate}</span>
+                                        <span className="font-bold text-slate-800 ">{d.certificate}</span>
                                         <span className="text-xs text-slate-500 ml-2">({d.shape} • {d.carat}ct • {d.color}/{d.clarity})</span>
                                         {d.status === 'sold' && <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] rounded font-bold">SOLD (Unbilled?)</span>}
                                     </div>
-                                    <div className="font-mono font-bold text-slate-600 dark:text-slate-400">
+                                    <div className="font-mono font-bold text-slate-600 ">
                                         ${d.sale_price || d.price}
                                     </div>
                                 </div>
@@ -175,9 +175,9 @@ const InvoiceForm = () => {
                 </div>
 
                 {/* Selected Items Table */}
-                <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="bg-white  rounded-xl border border-slate-200  overflow-hidden">
                     <table className="w-full text-left">
-                        <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 text-xs font-bold uppercase text-slate-500">
+                        <thead className="bg-slate-50  border-b border-slate-200  text-xs font-bold uppercase text-slate-500">
                             <tr>
                                 <th className="px-6 py-4">Certificate</th>
                                 <th className="px-6 py-4">Description</th>
@@ -186,14 +186,14 @@ const InvoiceForm = () => {
                                 <th className="px-6 py-4 w-10"></th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                        <tbody className="divide-y divide-slate-100 ">
                             {selectedDiamonds.length === 0 ? (
                                 <tr><td colSpan="5" className="text-center py-12 text-slate-400">No items added yet.</td></tr>
                             ) : (
                                 selectedDiamonds.map((d, index) => (
                                     <tr key={index} className="group">
-                                        <td className="px-6 py-4 font-bold text-slate-700 dark:text-slate-200">{d.certificate}</td>
-                                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-sm">
+                                        <td className="px-6 py-4 font-bold text-slate-700 ">{d.certificate}</td>
+                                        <td className="px-6 py-4 text-slate-600  text-sm">
                                             {d.shape}, {d.carat}ct, {d.color}, {d.clarity}
                                         </td>
                                         <td className="px-6 py-4 text-right font-mono text-slate-500">${d.price}</td>
@@ -202,7 +202,7 @@ const InvoiceForm = () => {
                                                 type="number"
                                                 value={d.finalSalePrice}
                                                 onChange={(e) => updateItem(d.id, 'finalSalePrice', e.target.value)}
-                                                className="w-32 text-right font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 rounded px-2 py-1 outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                                className="w-32 text-right font-bold text-emerald-600 bg-emerald-50  border border-emerald-100  rounded px-2 py-1 outline-none focus:ring-2 focus:ring-emerald-500/50"
                                             />
                                         </td>
                                         <td className="px-6 py-4 text-right">
@@ -215,10 +215,10 @@ const InvoiceForm = () => {
                             )}
                         </tbody>
                         {selectedDiamonds.length > 0 && (
-                            <tfoot className="bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                            <tfoot className="bg-slate-50  border-t border-slate-200 ">
                                 <tr>
-                                    <td colSpan="3" className="px-6 py-4 text-right font-bold text-slate-600 dark:text-slate-400 uppercase text-xs tracking-wider">Total</td>
-                                    <td className="px-6 py-4 text-right font-black text-xl text-slate-800 dark:text-white">
+                                    <td colSpan="3" className="px-6 py-4 text-right font-bold text-slate-600  uppercase text-xs tracking-wider">Total</td>
+                                    <td className="px-6 py-4 text-right font-black text-xl text-slate-800 ">
                                         ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                     <td></td>

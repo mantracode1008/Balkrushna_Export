@@ -1,44 +1,49 @@
 import React from 'react';
-
-const Layout = ({ children }) => {
-    return (
-        <div className="min-h-screen bg-slate-50">
-            {/* Sidebar Placeholder - will be passed in App */}
-            {/* Creating actual structure in App.jsx or here. Let's do it here properly if Sidebar was imported.
-             But usually App.jsx handles Router. I'll import Sidebar here. */}
-        </div>
-    );
-};
-// Revamping Layout usage. I will put Sidebar inside a LayoutWrapper in App.jsx or similar.
-// Actually, let's make Layout.jsx the main wrapper.
-
 import Sidebar from './Sidebar';
-import { ShoppingCart } from 'lucide-react';
-
-import { useTheme } from '../context/ThemeContext';
-import { Sun, Moon } from 'lucide-react';
+import authService from '../services/auth.service';
 
 const MainLayout = ({ children }) => {
-    const { theme, toggleTheme } = useTheme();
+    const user = authService.getCurrentUser();
+    const displayName = user ? user.name : 'Guest';
+    const displayRole = user ? (user.role === 'admin' ? 'Administrator' : 'Staff Member') : 'Guest';
+    const initial = user ? user.name.charAt(0).toUpperCase() : '?';
 
     return (
-        <div className="flex min-h-screen bg-white dark:bg-slate-900 font-sans transition-colors duration-300">
+        <div className="flex min-h-screen bg-[#F8FAFC] font-sans transition-colors duration-300 relative">
             <Sidebar />
-            <div className="flex-1 ml-64">
-                <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-700 px-8 py-4 flex justify-between items-center transition-colors duration-300">
-                    <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Admin Dashboard</h2>
+
+            {/* Background Watermark - High Key Light Visualization */}
+            <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
+                {/* Ambient Light Gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white via-blue-50/30 to-slate-100/50"></div>
+
+                {/* Large Diamond Symbol Watermark */}
+                <div className="relative w-[85vh] h-[85vh] opacity-[0.02] transform rotate-[-8deg] blur-[0.5px] select-none scale-125 mix-blend-multiply">
+                    <img
+                        src="/logo.png"
+                        alt=""
+                        className="w-full h-full object-cover object-[center_top]"
+                    />
+                </div>
+
+                {/* Diamond Refraction Sheen (Light Theme) */}
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.8)_0%,_rgba(219,234,254,0.3)_40%,_transparent_70%)] opacity-60"></div>
+            </div>
+
+            <div className="flex-1 ml-20 transition-all duration-300 ease-in-out z-10 relative">
+                <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 px-8 py-4 flex justify-between items-center transition-colors duration-300">
+                    <h2 className="text-lg font-bold text-slate-800 tracking-tight">Dashboard</h2>
                     <div className="flex items-center gap-4">
-                        <button
-                            onClick={toggleTheme}
-                            className="p-2 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-all"
-                            title="Toggle Dark Mode"
-                        >
-                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                        </button>
-                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-sm border border-blue-200 dark:border-blue-800">A</div>
+                        <div className="flex flex-col items-end mr-2">
+                            <span className="text-sm font-bold text-slate-700">{displayName}</span>
+                            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{displayRole}</span>
+                        </div>
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-100 to-indigo-100 flex items-center justify-center text-blue-600 font-bold text-sm border border-blue-200 shadow-sm">
+                            {initial}
+                        </div>
                     </div>
                 </header>
-                <main className="p-8 text-slate-800 dark:text-slate-200">
+                <main className="p-8 text-slate-800 max-w-[1920px] mx-auto">
                     {children}
                 </main>
             </div>

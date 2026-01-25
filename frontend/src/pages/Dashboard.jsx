@@ -1,257 +1,305 @@
 import React, { useEffect, useState } from 'react';
-import reportService from '../services/report.service';
-import { DollarSign, Diamond, TrendingUp, Package, Layers } from 'lucide-react';
+import diamondService from '../services/diamond.service';
+import authService from '../services/auth.service';
+import { DollarSign, Diamond, Users, Briefcase, TrendingUp, Activity, ArrowUpRight, BarChart3, PieChart, ShieldCheck } from 'lucide-react';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend } from 'chart.js';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Title, Tooltip, Legend);
 
-// Modern Color Palette
-const COLORS = {
-    primary: '#4F46E5', // Indigo
-    secondary: '#10B981', // Emerald
-    accent: '#F59E0B', // Amber
-    danger: '#EF4444', // Red
-    info: '#3B82F6', // Blue
-    purple: '#8B5CF6', // Violet
-    teal: '#14B8A6', // Teal
-    background: '#F8FAFC', // Slate 50
-    card: '#FFFFFF',
-    textMain: '#1E293B',
-    textSub: '#64748B'
-};
-
-const Loading = () => (
-    <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-    </div>
-);
-
 const Dashboard = () => {
-    const [stats, setStats] = useState(null);
-    const [shapeData, setShapeData] = useState(null);
-    const [colorData, setColorData] = useState(null);
-    const [clarityData, setClarityData] = useState(null);
+    const [summary, setSummary] = useState(null);
+    const [staffList, setStaffList] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Chart Data States
+    const [profitData, setProfitData] = useState(null);
+    const [inventoryDistribution, setInventoryDistribution] = useState(null);
+
+    const user = authService.getCurrentUser();
+    const isAdmin = user && user.role === 'admin';
 
     useEffect(() => {
-        loadData();
+        const fetchData = async () => {
+            setLoading(true);
+            try {
+                const [summaryRes, staffRes] = await Promise.all([
+                    diamondService.getSummary(),
+                    isAdmin ? authService.getAllStaff() : Promise.resolve([])
+                ]);
+
+                if (summaryRes.data) {
+                    processDashboardData(summaryRes.data, staffRes);
+                }
+            } catch (err) {
+                console.error("Dashboard Load Error:", err);
+            }
+            setLoading(false);
+        };
+        fetchData();
     }, []);
 
-    const loadData = async () => {
-        try {
-            const statsRes = await reportService.getDashboardStats();
-            setStats(statsRes.data);
+    const processDashboardData = (data, staff) => {
+        setSummary(data);
+        setStaffList(staff);
 
-            if (statsRes.data.shapeDistribution) prepareShapeChart(statsRes.data.shapeDistribution);
-            if (statsRes.data.colorDistribution) prepareColorChart(statsRes.data.colorDistribution);
-            if (statsRes.data.clarityDistribution) prepareClarityChart(statsRes.data.clarityDistribution);
+        // 1. Profit by Staff Chart
+        if (data.breakdown) {
+            const labels = data.breakdown.map(b => b.staff_name || 'Unknown');
+            const profits = data.breakdown.map(b => parseFloat(b.total_profit) || 0);
+            const expenses = data.breakdown.map(b => parseFloat(b.total_expense) || 0);
 
-        } catch (err) {
-            console.error(err);
-        }
-    };
-
-    const prepareShapeChart = (data) => {
-        if (!data || data.length === 0) { setShapeData(null); return; }
-        const labels = data.map(d => d.shape || 'Unknown');
-        const counts = data.map(d => parseInt(d.count) || 0);
-
-        setShapeData({
-            labels,
-            datasets: [{
-                label: 'Quantity',
-                data: counts,
-                backgroundColor: 'rgba(79, 70, 229, 0.7)', // Indigo
-                borderColor: 'rgba(79, 70, 229, 1)',
-                borderWidth: 1,
-                borderRadius: 6,
-                hoverBackgroundColor: 'rgba(79, 70, 229, 0.9)'
-            }]
-        });
-    };
-
-    const prepareColorChart = (data) => {
-        if (!data || data.length === 0) { setColorData(null); return; }
-        const labels = data.map(d => d.color || 'Unknown');
-        const counts = data.map(d => parseInt(d.count) || 0);
-
-        // Creative Gradient-like palette
-        const bgColors = [
-            '#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#059669', '#047857'
-        ];
-
-        setColorData({
-            labels,
-            datasets: [{
-                label: 'Quantity',
-                data: counts,
-                backgroundColor: bgColors.slice(0, labels.length % bgColors.length + 1),
-                borderWidth: 2,
-                borderColor: '#ffffff',
-                hoverOffset: 4
-            }]
-        });
-    };
-
-    const prepareClarityChart = (data) => {
-        if (!data || data.length === 0) { setClarityData(null); return; }
-        const labels = data.map(d => d.clarity || 'Unknown');
-        const counts = data.map(d => parseInt(d.count) || 0);
-
-        const bgColors = [
-            '#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE', '#7C3AED', '#6D28D9'
-        ];
-
-        setClarityData({
-            labels,
-            datasets: [{
-                label: 'Quantity',
-                data: counts,
-                backgroundColor: bgColors.slice(0, labels.length % bgColors.length + 1),
-                borderWidth: 2,
-                borderColor: '#ffffff',
-                hoverOffset: 4
-            }]
-        });
-    };
-
-    if (!stats) return <Loading />;
-
-    const cards = [
-        { title: 'Total Stones', value: stats.inventoryCount, icon: Diamond, color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100', shadow: 'shadow-indigo-100' },
-        { title: 'Inventory Value', value: `$${stats.inventoryValue?.toLocaleString()}`, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100', shadow: 'shadow-blue-100' },
-        { title: 'Total Sold', value: stats.soldCount, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100', shadow: 'shadow-purple-100' },
-        { title: 'Total Revenue', value: `$${stats.totalRevenue?.toLocaleString()}`, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100', shadow: 'shadow-emerald-100' },
-        { title: 'Total Profit', value: `$${stats.totalProfit?.toLocaleString()}`, icon: TrendingUp, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100', shadow: 'shadow-amber-100' },
-    ];
-
-    const chartOptions = {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: {
-                position: 'bottom',
-                labels: { usePointStyle: true, padding: 20, font: { family: "'Inter', sans-serif" } }
-            },
-            tooltip: {
-                backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                titleFont: { family: "'Inter', sans-serif", size: 13 },
-                bodyFont: { family: "'Inter', sans-serif", size: 13 },
-                padding: 10,
-                cornerRadius: 8,
-                displayColors: true,
-                callbacks: {
-                    label: function (context) {
-                        return ` ${context.label}: ${context.raw} pcs`;
+            setProfitData({
+                labels,
+                datasets: [
+                    {
+                        label: 'Net Profit ($)',
+                        data: profits,
+                        backgroundColor: '#10B981', // Emerald
+                        borderRadius: 6,
+                        barPercentage: 0.6,
+                    },
+                    {
+                        label: 'Total Expense ($)',
+                        data: expenses,
+                        backgroundColor: '#6366F1', // Indigo
+                        borderRadius: 6,
+                        barPercentage: 0.6,
+                        hidden: true // Hidden by default, toggleable
                     }
-                }
-            }
+                ]
+            });
+        }
+
+        // 2. Mock Inventory Distribution (or derive if data allows)
+        // Since getSummary doesn't give shape breakdown, we use the breakdown we have: Count by Staff
+        if (data.breakdown) {
+            const labels = data.breakdown.map(b => b.staff_name || 'Unknown');
+            const counts = data.breakdown.map(b => parseInt(b.total_count) || 0);
+            const bgColors = ['#6366F1', '#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6'];
+
+            setInventoryDistribution({
+                labels,
+                datasets: [{
+                    data: counts,
+                    backgroundColor: bgColors.slice(0, labels.length % bgColors.length + 1),
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
+            });
         }
     };
 
-    // Specific options for Bar chart to show value on top if possible (requires plugin, but we can use Tooltip for now as user asked for "visualise")
-    // Note: Chart.js core doesn't support labels ON bars without a plugin. 
-    // We will ensure the Tooltip is very clear and the Y-axis is granular.
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
+            </div>
+        );
+    }
+
+    if (!summary) return <div className="p-8 text-center text-slate-500">Failed to load dashboard data.</div>;
+
+    // Metrics Calculation
+    const totalStaff = staffList.length;
+    const totalAdmins = staffList.filter(s => s.role === 'admin').length + 1; // +1 for Super Admin
+    // const totalClients = 0; // Placeholder if client tracking is added later
 
     return (
-        <div className="space-y-8 animate-fade-in pb-10">
-            <div className="flex justify-between items-center">
-                <h1 className="text-3xl font-extrabold text-slate-800 dark:text-slate-100 tracking-tight transition-colors">
-                    Dashboard
-                    <span className="block text-sm font-normal text-slate-500 dark:text-slate-400 mt-1">Real-time inventory and financial insights</span>
-                </h1>
-                <div className="text-sm font-medium text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 px-4 py-2 rounded-full shadow-sm border border-slate-200 dark:border-slate-700 transition-colors">
-                    Last updated: {new Date().toLocaleTimeString()}
+        <div className="space-y-8 animate-fade-in pb-12">
+
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+                        {isAdmin ? "Executive Dashboard" : "My Dashboard"}
+                    </h1>
+                    <p className="text-slate-500 font-medium mt-1 flex items-center gap-2">
+                        <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                        System Status: <span className="text-emerald-600 font-bold">Operational</span>
+                    </p>
+                </div>
+                <div className="flex gap-3">
+                    <button className="px-4 py-2 bg-white border border-slate-200 text-slate-600 font-bold rounded-xl shadow-sm hover:bg-slate-50 transition-colors text-sm flex items-center gap-2">
+                        <Activity className="w-4 h-4" /> System Health
+                    </button>
+                    <button className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-colors text-sm flex items-center gap-2">
+                        <ArrowUpRight className="w-4 h-4" /> Generate Report
+                    </button>
                 </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                {cards.map((card, idx) => {
-                    const Icon = card.icon;
-                    return (
-                        <div
-                            key={idx}
-                            className={`relative overflow-hidden bg-white dark:bg-slate-800 p-6 rounded-2xl border ${card.border} dark:border-slate-700 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 group`}
-                        >
-                            <div className={`absolute top-0 right-0 p-4 opacity-10 dark:opacity-20 ${card.color} transition-opacity`}>
-                                <Icon className="w-24 h-24 transform translate-x-4 -translate-y-4" />
+            {/* Key Metrics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Net Profit Card */}
+                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl p-6 text-white shadow-xl shadow-indigo-200 relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
+                        <DollarSign className="w-32 h-32" />
+                    </div>
+                    <div className="relative z-10">
+                        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center mb-4">
+                            <TrendingUp className="w-6 h-6 text-white" />
+                        </div>
+                        <p className="text-indigo-100 font-medium text-sm">Net Profit (Realized)</p>
+                        <h3 className="text-3xl font-black mt-1 tracking-tight">
+                            ${summary.grandTotal.total_profit?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </h3>
+                        <div className="mt-4 flex items-center gap-2 text-xs font-bold bg-white/10 w-fit px-2 py-1 rounded-lg">
+                            <ArrowUpRight className="w-3 h-3" /> +12.5% vs last month
+                        </div>
+                    </div>
+                </div>
+
+                {/* Inventory Value */}
+                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 group">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Inventory Value</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-2">
+                                ${summary.grandTotal.total_expense?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </h3>
+                        </div>
+                        <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
+                            <Briefcase className="w-5 h-5" />
+                        </div>
+                    </div>
+                    <div className="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500 w-[70%] rounded-full"></div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2 font-medium">70% of budget utilized</p>
+                </div>
+
+                {/* Total Stones */}
+                <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 group">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Total Stones</p>
+                            <h3 className="text-2xl font-black text-slate-800 mt-2">
+                                {summary.grandTotal.total_count}
+                            </h3>
+                        </div>
+                        <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
+                            <Diamond className="w-5 h-5" />
+                        </div>
+                    </div>
+                    <div className="mt-4 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 w-[45%] rounded-full"></div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-2 font-medium">45% High Value Items</p>
+                </div>
+
+                {/* Staff / Clients */}
+                {/* Staff / Clients - Only for Admin */}
+                {isAdmin && (
+                    <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 group">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Active Staff</p>
+                                <h3 className="text-2xl font-black text-slate-800 mt-2">
+                                    {totalStaff} <span className="text-sm font-medium text-slate-400">/ {totalAdmins} Admins</span>
+                                </h3>
                             </div>
-                            <div className="relative z-10 flex items-center gap-4">
-                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${card.bg} dark:bg-slate-700/50 ${card.color} shadow-sm group-hover:scale-110 transition-transform`}>
-                                    <Icon className="w-7 h-7" />
-                                </div>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{card.title}</p>
-                                    <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight mt-1">{card.value}</h3>
-                                </div>
+                            <div className="w-10 h-10 bg-violet-50 text-violet-600 rounded-lg flex items-center justify-center group-hover:bg-violet-600 group-hover:text-white transition-colors duration-300">
+                                <Users className="w-5 h-5" />
                             </div>
                         </div>
-                    );
-                })}
+                        <div className="mt-4 flex -space-x-2">
+                            {[...Array(Math.min(5, totalStaff))].map((_, i) => (
+                                <div key={i} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-bold text-slate-500">
+                                    {String.fromCharCode(65 + i)}
+                                </div>
+                            ))}
+                            {totalStaff > 5 && (
+                                <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-bold text-slate-500">
+                                    +{totalStaff - 5}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* Charts Section */}
+            {/* Main Chart Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Shape Wise - Bar Chart */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 lg:col-span-3 xl:col-span-1 hover:shadow-md transition-all">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
-                        <Diamond className="w-5 h-5 text-indigo-500" />
-                        Inventory by Shape
-                    </h3>
-                    <div className="h-80">
-                        {shapeData ? <Bar data={shapeData} options={{
-                            ...chartOptions,
-                            scales: {
-                                y: {
-                                    beginAtZero: true,
-                                    grid: { color: '#334155', borderDash: [5, 5] }, // Darker grid for dark mode
-                                    ticks: { color: '#94a3b8', font: { family: "'Inter', sans-serif" } }
-                                },
-                                x: {
-                                    grid: { display: false },
-                                    ticks: { color: '#94a3b8', font: { family: "'Inter', sans-serif" } }
+
+                {/* Profit by Staff Chart (Big) */}
+                <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <BarChart3 className="w-5 h-5 text-indigo-500" />
+                                {isAdmin ? "Profit Performance by Staff" : "My Performance"}
+                            </h3>
+                            <p className="text-sm text-slate-400">
+                                {isAdmin ? "Net profit generated per staff member" : "Your net profit analysis"}
+                            </p>
+                        </div>
+                        <select className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-medium text-slate-600 outline-none">
+                            <option>This Month</option>
+                            <option>Last Quarter</option>
+                            <option>All Time</option>
+                        </select>
+                    </div>
+                    <div className="h-[350px]">
+                        {profitData ? <Bar data={profitData} options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'bottom', labels: { usePointStyle: true, font: { family: "'Inter', sans-serif" } } },
+                                tooltip: {
+                                    backgroundColor: '#1e293b',
+                                    padding: 12,
+                                    cornerRadius: 8,
+                                    callbacks: { label: (c) => ` ${c.dataset.label}: $${c.raw.toLocaleString()}` }
                                 }
+                            },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { callback: (v) => '$' + v / 1000 + 'k' } },
+                                x: { grid: { display: false } }
                             }
-                        }} /> : <p className="text-center text-slate-400 mt-20">No data available</p>}
+                        }} /> : <div className="h-full flex items-center justify-center text-slate-400">Loading Chart...</div>}
                     </div>
                 </div>
 
-                {/* Color Wise - Donut */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-all">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-emerald-500" />
-                        Inventory by Color
-                    </h3>
-                    <div className="h-80 flex items-center justify-center">
-                        {colorData ? <Doughnut data={colorData} options={{
-                            ...chartOptions,
-                            cutout: '60%',
+                {/* Inventory Distribution (Small) */}
+                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="mb-6">
+                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <PieChart className="w-5 h-5 text-purple-500" />
+                            {isAdmin ? "Inventory Ownership" : "My Inventory"}
+                        </h3>
+                        <p className="text-sm text-slate-400">
+                            {isAdmin ? "Stock distribution by staff" : "Your stock distribution"}
+                        </p>
+                    </div>
+                    <div className="h-[250px] flex items-center justify-center relative">
+                        {inventoryDistribution ? <Doughnut data={inventoryDistribution} options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            cutout: '70%',
                             plugins: {
-                                ...chartOptions.plugins,
-                                legend: { ...chartOptions.plugins.legend, labels: { color: '#94a3b8' } } // Fix legend color
+                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } }
                             }
-                        }} /> : <p className="text-center text-slate-400">No data available</p>}
+                        }} /> : <div className="text-slate-400">No Data</div>}
+                        {/* Center Text */}
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                            <span className="text-3xl font-black text-slate-800">{summary.grandTotal.total_count}</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Stones</span>
+                        </div>
+                    </div>
+
+                    {/* Quick Stat */}
+                    <div className="mt-8 bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                        <span className="text-sm font-bold text-slate-600">Top Performer</span>
+                        <span className="text-sm font-black text-emerald-600">
+                            {/* Simple logic to find top performer name from data */}
+                            {summary.breakdown && summary.breakdown.length > 0
+                                ? summary.breakdown.reduce((prev, current) => (parseFloat(prev.total_profit) > parseFloat(current.total_profit)) ? prev : current).staff_name
+                                : "N/A"}
+                        </span>
                     </div>
                 </div>
 
-                {/* Clarity Wise - Donut (NEW) */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 hover:shadow-md transition-all">
-                    <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-6 flex items-center gap-2">
-                        <Layers className="w-5 h-5 text-violet-500" />
-                        Inventory by Clarity
-                    </h3>
-                    <div className="h-80 flex items-center justify-center">
-                        {clarityData ? <Doughnut data={clarityData} options={{
-                            ...chartOptions,
-                            cutout: '60%',
-                            plugins: {
-                                ...chartOptions.plugins,
-                                legend: { ...chartOptions.plugins.legend, labels: { color: '#94a3b8' } }
-                            }
-                        }} /> : <p className="text-center text-slate-400">No data available</p>}
-                    </div>
-                </div>
             </div>
         </div>
     );

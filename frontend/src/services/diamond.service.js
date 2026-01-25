@@ -51,6 +51,10 @@ const calculateRapPrice = (data) => {
     return api.post("/pricing/calculate-rap", data);
 };
 
+const getSummary = () => {
+    return api.get("/diamonds/summary");
+};
+
 const DiamondService = {
     getAll,
     get,
@@ -59,13 +63,16 @@ const DiamondService = {
     remove,
     bulkDelete,
     getBuyers: () => api.get("/diamonds/buyers"),
+    getCompanies: () => api.get("/companies"),
     fetchExternal,
     uploadCsv,
     bulkCreate,
     updateStatus,
     bulkUpdateStatus,
+    bulkUpdateStatus,
     calculateRapPrice,
-    getBuyers: () => api.get("/diamonds/buyers")
+    getSummary,
+    bulkSell: (data) => api.post("/diamonds/bulk-sell", data)
 };
 
 export default DiamondService;

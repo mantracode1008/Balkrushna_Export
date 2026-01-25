@@ -13,31 +13,7 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.STRING
         },
         description: {
-            type: Sequelize.TEXT
-        },
-        ratio: {
             type: Sequelize.STRING
-        },
-        shade: {
-            type: Sequelize.STRING
-        },
-        inclusion: {
-            type: Sequelize.STRING
-        },
-        key_to_symbols: {
-            type: Sequelize.TEXT
-        },
-        lab_comment: {
-            type: Sequelize.TEXT
-        },
-        member_comment: {
-            type: Sequelize.TEXT
-        },
-        vendor_stock_no: {
-            type: Sequelize.STRING
-        },
-        item_url: {
-            type: Sequelize.TEXT
         },
         shape: {
             type: Sequelize.STRING
@@ -138,60 +114,13 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.STRING
         },
         report_url: {
-            type: Sequelize.TEXT
+            type: Sequelize.STRING
         },
         seller_country: {
             type: Sequelize.STRING
         },
         company: {
             type: Sequelize.STRING
-        },
-        price_per_carat: {
-            type: Sequelize.DECIMAL(10, 2)
-        },
-        total_price: {
-            type: Sequelize.DECIMAL(10, 2)
-        },
-        rap_discount: {
-            type: Sequelize.DECIMAL(10, 2)
-        },
-        seller_name: {
-            type: Sequelize.STRING
-        },
-        // Advanced Sales Flow Fields
-        sale_type: {
-            type: Sequelize.ENUM('STOCK', 'ORDER'),
-            defaultValue: 'STOCK'
-        },
-        client_id: {
-            type: Sequelize.INTEGER,
-            allowNull: true
-        },
-        // Currency & Commission
-        currency: {
-            type: Sequelize.STRING,
-            defaultValue: 'USD'
-        },
-        exchange_rate: {
-            type: Sequelize.DECIMAL(10, 2),
-            defaultValue: 1.00
-        },
-        commission_usd: {
-            type: Sequelize.DECIMAL(10, 2),
-            defaultValue: 0
-        },
-        commission_inr: {
-            type: Sequelize.DECIMAL(10, 2),
-            defaultValue: 0
-        },
-        final_price_usd: {
-            type: Sequelize.DECIMAL(10, 2)
-        },
-        final_price_inr: {
-            type: Sequelize.DECIMAL(10, 2)
-        },
-        sale_date: {
-            type: Sequelize.DATE
         }
     });
 

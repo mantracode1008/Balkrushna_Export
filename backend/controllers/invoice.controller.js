@@ -3,6 +3,7 @@ const Invoice = db.invoices;
 const InvoiceItem = db.invoiceItems;
 const Diamond = db.diamonds;
 const pdfGenerator = require("../utils/pdfGenerator");
+const xlsx = require("xlsx");
 const Op = db.Sequelize.Op;
 
 // Create Invoice
@@ -40,6 +41,18 @@ exports.create = async (req, res) => {
             // User requested that Profit should include the "Commission" (Markup). 
             // So we do NOT subtract commission from the profit formula.
             // Formula: unitProfit = salePrice - costPrice.
+            // Extract values from item or defaults
+            const quantity = item.quantity || 1;
+            const salePrice = parseFloat(item.salePrice) || 0;
+            const commission = diamond.commission || 0;
+
+            // Calculate Cost Price (Base Price - Discount)
+            // Assuming diamond.price is the base price and diamond.discount is percentage
+            const basePrice = parseFloat(diamond.price) || 0;
+            const discount = parseFloat(diamond.discount) || 0;
+            const costPrice = basePrice * (1 - discount / 100);
+
+            // Formula: unitProfit = salePrice - costPrice.
             const unitProfit = salePrice - costPrice;
             const totalItemProfit = unitProfit * quantity;
             const totalItemAmount = salePrice * quantity;
@@ -56,8 +69,8 @@ exports.create = async (req, res) => {
             });
 
             // Update Diamond Quantity and Status
-            const newQuantity = diamond.quantity - quantity;
-            const newStatus = newQuantity === 0 ? 'sold' : 'in_stock';
+            const newQuantity = (diamond.quantity || 1) - quantity;
+            const newStatus = newQuantity <= 0 ? 'sold' : 'in_stock';
 
             await diamond.update({
                 quantity: newQuantity,
@@ -69,7 +82,8 @@ exports.create = async (req, res) => {
             customer_name: customerName,
             total_amount: totalAmount,
             total_profit: totalProfit,
-            invoice_date: new Date()
+            invoice_date: new Date(),
+            created_by: req.userId // Save the user who created this invoice
         }, { transaction: t });
 
         for (const itemData of invoiceItemsData) {
@@ -88,7 +102,13 @@ exports.create = async (req, res) => {
 };
 
 exports.findAll = (req, res) => {
+    const whereCondition = {};
+    if (req.userRole === 'staff') {
+        whereCondition.created_by = req.userId;
+    }
+
     Invoice.findAll({
+        where: whereCondition,
         include: [{
             model: InvoiceItem,
             as: "items",
@@ -199,9 +219,9 @@ exports.deleteAll = async (req, res) => {
             });
         }
 
-        // 2. Truncate Tables
-        await InvoiceItem.destroy({ truncate: true, cascade: false, transaction: t });
-        await Invoice.destroy({ truncate: true, cascade: false, transaction: t });
+        // 2. Truncate Tables - Use destroy with where for safety in transaction
+        await InvoiceItem.destroy({ where: {}, transaction: t });
+        await Invoice.destroy({ where: {}, transaction: t });
 
         await t.commit();
         res.send({ message: "All Invoices deleted and stock restored successfully!" });
@@ -211,5 +231,138 @@ exports.deleteAll = async (req, res) => {
         res.status(500).send({
             message: err.message || "Some error occurred while removing all invoices."
         });
+    }
+};
+
+
+// EXCEL EXPORT
+exports.exportExcel = async (req, res) => {
+    try {
+        const { id, ids, startDate, endDate, customer, deliveryStatus } = req.body || {};
+        // Also support query params for single ID (e.g. GET /:id/excel)
+        const paramId = req.params.id;
+
+        const whereCondition = {};
+
+        // 1. Determine Filters
+        if (paramId) {
+            whereCondition.id = paramId;
+        } else if (id) {
+            whereCondition.id = id;
+        } else if (ids && Array.isArray(ids) && ids.length > 0) {
+            whereCondition.id = ids;
+        } else {
+            // Bulk Filters
+            if (startDate) whereCondition.invoice_date = { [Op.gte]: new Date(startDate) };
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                if (whereCondition.invoice_date) {
+                    whereCondition.invoice_date = { ...whereCondition.invoice_date, [Op.lte]: end };
+                } else {
+                    whereCondition.invoice_date = { [Op.lte]: end };
+                }
+            }
+            if (customer) whereCondition.customer_name = { [Op.like]: `%${customer}%` };
+        }
+
+        // RBAC
+        if (req.userRole === 'staff') {
+            whereCondition.created_by = req.userId;
+        }
+
+        // 2. Fetch Data
+        const invoices = await Invoice.findAll({
+            where: whereCondition,
+            include: [{
+                model: InvoiceItem,
+                as: "items",
+                include: [{
+                    model: Diamond,
+                    as: "diamond",
+                    include: [{ model: db.admins, as: "creator", attributes: ['name'] }]
+                }]
+            }],
+            order: [['invoice_date', 'DESC']]
+        });
+
+        if (invoices.length === 0) {
+            return res.status(404).send({ message: "No invoices found to export." });
+        }
+
+        // 3. Flat Map Data for Excel
+        const rows = [];
+        invoices.forEach(inv => {
+            if (!inv.items) return; // Safety check
+            inv.items.forEach(item => {
+                const d = item.diamond;
+                const row = {
+                    // Invoice / Sale Details
+                    "Invoice ID": inv.id,
+                    "Date": new Date(inv.invoice_date).toLocaleDateString(),
+                    "Customer": inv.customer_name,
+                    "Sold By": d && d.creator ? d.creator.name : 'Admin',
+
+                    // Diamond - Identification
+                    "Certificate": d ? d.certificate : 'N/A',
+                    "Shape": d ? d.shape : '',
+                    "Carat": d ? d.carat : 0,
+
+                    // Diamond - Quality (4Cs)
+                    "Color": d ? d.color : '',
+                    "Clarity": d ? d.clarity : '',
+                    "Cut": d ? d.cut : '',
+                    "Polish": d ? d.polish : '',
+                    "Sym": d ? d.symmetry : '',
+                    "Fluor": d ? d.fluorescence : '',
+                    "Lab": d ? d.lab : '',
+
+                    // Diamond - Other Specs
+                    "Measurements": d ? d.measurements : '',
+                    "Table %": d ? d.table_percent : '',
+                    "Depth %": d ? d.total_depth_percent : '',
+
+                    // Diamond - Source/Logistics (User Request: "fetching from and sell to")
+                    "Company": d ? d.company : '',
+                    "Stock Location (From)": d ? d.buyer_country : '', // 'buyer_country' stores 'Stock Location' per form logic
+                    "Buyer Location (To)": d ? d.seller_country : '',   // 'seller_country' stores 'Buyer Location' per form logic
+
+                    // Financials
+                    "Sale Price": parseFloat(item.sale_price) || 0,
+
+                    // Admin Only Fields?
+                    // Usually exports are for admin/accounting. 
+                    // Let's include cost/profit if admin.
+                    ...(req.userRole === 'admin' ? {
+                        "Cost Price": d ? parseFloat(d.price * (1 - (d.discount || 0) / 100)) : 0,
+                        "Initial Price": d ? parseFloat(d.price) : 0,
+                        "Discount %": d ? parseFloat(d.discount) : 0,
+                        "Profit": parseFloat(item.profit) || 0
+                    } : {})
+                };
+                rows.push(row);
+            });
+        });
+
+        // 4. Generate Excel
+        const wb = xlsx.utils.book_new();
+        const ws = xlsx.utils.json_to_sheet(rows);
+
+        // Auto-width columns roughly
+        const colWidths = Object.keys(rows[0] || {}).map(k => ({ wch: k.length + 5 }));
+        ws['!cols'] = colWidths;
+
+        xlsx.utils.book_append_sheet(wb, ws, "Sales Data");
+
+        const wbout = xlsx.write(wb, { bookType: 'xlsx', type: 'buffer' });
+
+        // 5. Send Response
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=Sales_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        res.send(wbout);
+
+    } catch (err) {
+        console.error("Export Error:", err);
+        res.status(500).send({ message: "Export failed: " + err.message });
     }
 };

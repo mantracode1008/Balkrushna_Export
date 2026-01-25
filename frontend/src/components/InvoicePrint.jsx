@@ -81,13 +81,9 @@ const InvoicePrint = () => {
                 <header className="flex justify-between items-start border-b-2 border-slate-100 pb-8 mb-8">
                     {/* Company Info (Left for Logo/Name based on prompt "Company Logo (top-left)") */}
                     <div className="w-1/2">
-                        {/* Placeholder Logo */}
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 bg-blue-900 rounded-lg flex items-center justify-center text-white font-bold text-2xl">B</div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-blue-900 leading-none tracking-tight">BALKRISHNA</h1>
-                                <p className="text-sm text-slate-500 font-medium tracking-widest uppercase">Exports</p>
-                            </div>
+                        {/* Company Logo */}
+                        <div className="mb-6">
+                            <img src="/logo.png" alt="Company Logo" className="h-24 w-auto object-contain" />
                         </div>
                         <div className="text-xs text-slate-500 leading-relaxed">
                             <p>Opera House, Mumbai, India</p>

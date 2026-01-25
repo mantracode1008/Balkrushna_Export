@@ -1,7 +1,7 @@
 import api from "./api";
 
-const getDashboardStats = () => {
-    return api.get("/dashboard");
+const getDashboardStats = (params) => {
+    return api.get("/dashboard", { params });
 };
 
 const getReports = (params) => {

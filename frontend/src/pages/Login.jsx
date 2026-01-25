@@ -1,302 +1,327 @@
-/* eslint-disable react/prop-types */
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import authService from '../services/auth.service';
-import { Lock, Unlock, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
+import { User, AlertTriangle, Diamond, Sparkles, KeyRound, ChevronRight } from 'lucide-react';
 
-const Login = () => {
-    const navigate = useNavigate();
-    const [pin, setPin] = useState([]);
-    const [error, setError] = useState('');
-    const [attempts, setAttempts] = useState(0);
-    const [isLocked, setIsLocked] = useState(false);
-
-    // Modes: 'VERIFY' | 'ADMIN_UNLOCK' | 'RESET_PIN' | 'CONFIRM_PIN'
-    const [mode, setMode] = useState('VERIFY');
-    const [adminPass, setAdminPass] = useState('');
-    const [resetToken, setResetToken] = useState(null);
-    const [newPin, setNewPin] = useState([]);
-
-    // Check if User is already logged in
-    useEffect(() => {
-        const user = authService.getCurrentUser();
-        if (user) {
-            navigate('/');
-        }
-    }, [navigate]);
-
-    const handlePress = (digit) => {
-        if (error) setError('');
-
-        // Admin Unlock Input
-        if (mode === 'ADMIN_UNLOCK') {
-            if (digit === 'BACK') {
-                setAdminPass(prev => prev.slice(0, -1));
-            } else {
-                // Admin password is distinct from PIN, but we can reuse numpad or use keyboard?
-                // User requested "Enter Admin Password to Reset". Password is 'BalKrishna1008'.
-                // This contains letters, so maybe we need a text input for Admin Password?
-                // "Support keyboard or click input"
-            }
-            return;
-        }
-
-        // PIN Inputs
-        let currentPin = mode === 'RESET_PIN' ? newPin : pin;
-        let setFunc = mode === 'RESET_PIN' ? setNewPin : setPin;
-
-        if (digit === 'BACK') {
-            setFunc(prev => prev.slice(0, -1));
-            return;
-        }
-
-        if (currentPin.length < 8) {
-            const updated = [...currentPin, digit];
-            setFunc(updated);
-
-            // Auto-submit on 8th digit
-            if (updated.length === 8) {
-                if (mode === 'VERIFY') verify(updated.join(''));
-                else if (mode === 'RESET_PIN') confirmReset(updated.join(''));
-            }
-        }
-    };
-
-    const verify = async (pinValue) => {
-        try {
-            await authService.verifyPin(pinValue);
-            navigate('/');
-        } catch (err) {
-            setPin([]);
-            const isLock = err.response?.data?.isLocked;
-            const msg = err.response?.data?.message || "Incorrect PIN";
-            setError(msg);
-
-            if (isLock) {
-                setIsLocked(true);
-                setAttempts(5);
-            } else {
-                setAttempts(prev => prev + 1);
-                if (attempts + 1 >= 5) setIsLocked(true);
-            }
-        }
-    };
-
-    const unlockSystem = async (e) => {
-        e.preventDefault();
-        try {
-            const res = await authService.adminUnlock(adminPass);
-            setResetToken(res.resetToken);
-            setMode('RESET_PIN');
-            setError('');
-            setAdminPass('');
-            setPin([]); // Clear old state
-        } catch (err) {
-            setError(err.response?.data?.message || "Invalid Admin Password");
-        }
-    };
-
-    const confirmReset = async (pinValue) => {
-        // Actually we should confirm twice, but requirement says "Require old PIN confirmation first" ?
-        // Wait, requirement: "Require old PIN confirmation first" -> But old PIN is forgotten surely?
-        // Ah "When entered correctly (Admin Pass): Show Set New 8-Digit PIN form". 
-        // "Require old PIN confirmation first" -> That implies knowing the old PIN.
-        // But if I am resetting because I forgot, how can I enter old PIN?
-        // "Then allow to enter new 8-digit PIN".
-        // Maybe "Require old PIN confirmation" means "Confirm New PIN"? or "Verify Admin Pass"? 
-        // Given the context of "Forgot PIN", requiring Old PIN makes no sense.
-        // I will implement "Enter New PIN" -> "Confirm New PIN" flow or just single entry if simple.
-        // Requirement: "Show Set New 8-Digit PIN form".
-
-        // Let's implement single entry 8-digit set for simplicity first, or Confirm step.
-        try {
-            await authService.resetPin(pinValue, resetToken);
-            alert("PIN Reset Successfully! Please Log in.");
-            setMode('VERIFY');
-            setNewPin([]);
-            setResetToken(null);
-            setIsLocked(false);
-            setAttempts(0);
-            setError('');
-        } catch (err) {
-            setError(err.response?.data?.message || "Reset Failed");
-            setNewPin([]);
-        }
-    };
-
-    // Keyboard Support
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (mode === 'ADMIN_UNLOCK') return; // Default input handling
-            if (!isNaN(e.key) && e.key !== ' ') handlePress(parseInt(e.key));
-            if (e.key === 'Backspace') handlePress('BACK');
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [pin, mode, newPin]);
-
-    // Framer Variants
-    const shakeVariant = {
-        shake: {
-            x: [0, -10, 10, -10, 10, 0],
-            transition: { duration: 0.4 }
-        }
-    };
-
+// Precision Grid Background
+const PrecisionGrid = () => {
     return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 text-white font-sans overflow-hidden">
-            <div className="max-w-md w-full flex flex-col items-center">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            {/* Horizontal Lines */}
+            <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:100%_4rem]" />
+            {/* Vertical Lines */}
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:4rem_100%]" />
 
-                {/* Header / Status Icon */}
-                <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    className="mb-8"
-                >
-                    {isLocked ? (
-                        <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center border border-red-500/50 shadow-[0_0_30px_rgba(239,68,68,0.3)]">
-                            <Lock className="w-10 h-10 text-red-500" />
-                        </div>
-                    ) : mode === 'RESET_PIN' ? (
-                        <div className="w-20 h-20 bg-blue-500/20 rounded-full flex items-center justify-center border border-blue-500/50 shadow-[0_0_30px_rgba(59,130,246,0.3)]">
-                            <RefreshCw className="w-10 h-10 text-blue-500" />
-                        </div>
-                    ) : (
-                        <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/50 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                            <Unlock className="w-10 h-10 text-emerald-500" />
-                        </div>
-                    )}
-                </motion.div>
+            {/* Radial Vignette */}
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#020617_100%)] opacity-80" />
 
-                {/* Title & Instructions */}
-                <h1 className="text-2xl font-bold tracking-wider mb-2">
-                    {isLocked ? "SYSTEM LOCKED" : mode === 'RESET_PIN' ? "SET NEW PIN" : "ENTER PIN"}
-                </h1>
-                <p className="text-slate-400 mb-8 text-sm">
-                    {isLocked ? "Maximum attempts exceeded." : mode === 'RESET_PIN' ? "Enter 8-digit secure code" : "Please enter your 8-digit access code"}
-                </p>
-
-                {/* Error Message */}
-                <AnimatePresence>
-                    {error && (
-                        <motion.div
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0 }}
-                            className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-2 rounded-lg mb-6 flex items-center gap-2 text-sm"
-                        >
-                            <AlertTriangle size={16} />
-                            {error}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-
-                {/* LOCKED VIEW: Admin Password Input */}
-                {isLocked && mode !== 'ADMIN_UNLOCK' && (
-                    <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => setMode('ADMIN_UNLOCK')}
-                        className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-semibold shadow-lg shadow-red-900/20 transition-all w-full"
-                    >
-                        Unlock with Admin Password
-                    </motion.button>
-                )}
-
-                {mode === 'ADMIN_UNLOCK' && (
-                    <form onSubmit={unlockSystem} className="w-full flex flex-col gap-4">
-                        <input
-                            type="password"
-                            placeholder="Enter Admin Password"
-                            value={adminPass}
-                            onChange={(e) => setAdminPass(e.target.value)}
-                            className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg focus:outline-none focus:border-red-500 transition-colors"
-                            autoFocus
-                        />
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={() => { setMode('VERIFY'); setError(''); }}
-                                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-3 rounded-xl font-medium transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="flex-1 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white py-3 rounded-xl font-bold shadow-lg transition-all"
-                            >
-                                Unlock
-                            </button>
-                        </div>
-                    </form>
-                )}
-
-                {/* PIN INPUT VIEW */}
-                {!isLocked && (mode === 'VERIFY' || mode === 'RESET_PIN') && (
-                    <>
-                        {/* Dots Display */}
-                        <motion.div
-                            animate={error ? "shake" : ""}
-                            variants={shakeVariant}
-                            className="flex gap-3 mb-12"
-                        >
-                            {[...Array(8)].map((_, i) => (
-                                <div
-                                    key={i}
-                                    className={`w-4 h-4 rounded-full transition-all duration-300 ${(mode === 'RESET_PIN' ? newPin.length : pin.length) > i
-                                            ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)] scale-110'
-                                            : 'bg-slate-700 border border-slate-600'
-                                        }`}
-                                />
-                            ))}
-                        </motion.div>
-
-                        {/* Numpad */}
-                        <div className="grid grid-cols-3 gap-6 w-full max-w-xs">
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                                <NumKey key={num} digit={num} onPress={handlePress} />
-                            ))}
-                            <div className="flex items-center justify-center">
-                                {/* Empty or Forgot PIN? */}
-                                {mode === 'VERIFY' && attempts > 2 && !isLocked && (
-                                    <button onClick={() => setMode('ADMIN_UNLOCK')} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                                        Recall Admin?
-                                    </button>
-                                )}
-                            </div>
-                            <NumKey digit={0} onPress={handlePress} />
-                            <button
-                                onClick={() => handlePress('BACK')}
-                                className="w-16 h-16 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-all active:scale-95"
-                            >
-                                <span className="text-lg font-medium">Del</span>
-                            </button>
-                        </div>
-                    </>
-                )}
-
-                {/* Footer */}
-                <div className="mt-12 text-center">
-                    <p className="text-slate-600 text-xs uppercase tracking-widest font-semibold">
-                        Mantracode Diamond Security
-                    </p>
-                </div>
-            </div>
+            {/* Light Refraction / Shimmer */}
+            <motion.div
+                animate={{
+                    opacity: [0.3, 0.5, 0.3],
+                    scale: [1, 1.1, 1],
+                }}
+                transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute top-[-20%] left-[-10%] w-[60vw] h-[60vw] bg-blue-500/10 rounded-full blur-[120px] mix-blend-screen"
+            />
+            <motion.div
+                animate={{
+                    opacity: [0.2, 0.4, 0.2],
+                    x: [0, 50, 0],
+                }}
+                transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute bottom-[-10%] right-[-5%] w-[50vw] h-[50vw] bg-indigo-500/10 rounded-full blur-[100px] mix-blend-screen"
+            />
         </div>
     );
 };
 
-// Reusable Key Component
-const NumKey = ({ digit, onPress }) => (
-    <motion.button
-        whileHover={{ scale: 1.1, backgroundColor: "rgba(255,255,255,0.05)" }}
-        whileTap={{ scale: 0.9 }}
-        onClick={() => onPress(digit)}
-        className="w-16 h-16 rounded-full bg-slate-800/50 border border-slate-700 flex items-center justify-center text-2xl font-light text-white shadow-xl backdrop-blur-sm transition-colors"
-    >
-        {digit}
-    </motion.button>
-);
+// 3D Floating Diamond Shapes
+const FloatingDiamonds = () => {
+    const diamonds = Array.from({ length: 12 }).map((_, i) => ({
+        id: i,
+        size: Math.random() * 30 + 10,
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        duration: Math.random() * 20 + 10,
+        delay: Math.random() * 5,
+        opacity: Math.random() * 0.15 + 0.05,
+    }));
+
+    return (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            {diamonds.map((d) => (
+                <motion.div
+                    key={d.id}
+                    className="absolute text-blue-300"
+                    style={{
+                        left: `${d.left}%`,
+                        top: `${d.top}%`,
+                        opacity: d.opacity,
+                    }}
+                    animate={{
+                        y: [0, -40, 0],
+                        rotate: [0, 180, 360],
+                        scale: [1, 1.2, 1],
+                    }}
+                    transition={{
+                        duration: d.duration,
+                        repeat: Infinity,
+                        ease: "easeInOut",
+                        delay: d.delay,
+                    }}
+                >
+                    <Diamond size={d.size} strokeWidth={1} />
+                </motion.div>
+            ))}
+        </div>
+    );
+};
+
+// Twinkling Sparkles Effect
+const DiamondSparkles = () => {
+    const sparkles = Array.from({ length: 20 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        delay: Math.random() * 5,
+        duration: Math.random() * 2 + 1,
+        scale: Math.random() * 0.5 + 0.5,
+    }));
+
+    return (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+            {sparkles.map((s) => (
+                <motion.div
+                    key={s.id}
+                    className="absolute text-white"
+                    style={{
+                        left: `${s.left}%`,
+                        top: `${s.top}%`,
+                    }}
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{
+                        opacity: [0, 0.8, 0],
+                        scale: [0, s.scale, 0],
+                        rotate: [0, 45, 90],
+                    }}
+                    transition={{
+                        duration: s.duration,
+                        repeat: Infinity,
+                        delay: s.delay,
+                        ease: "easeInOut",
+                    }}
+                >
+                    <Sparkles size={12 * s.scale} fill="currentColor" />
+                </motion.div>
+            ))}
+        </div>
+    );
+};
+
+const Login = () => {
+    const navigate = useNavigate();
+    const [identity, setIdentity] = useState('');
+    const [secret, setSecret] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [focusedField, setFocusedField] = useState(null);
+
+    useEffect(() => {
+        const user = authService.getCurrentUser();
+        if (user) navigate('/');
+    }, [navigate]);
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+
+        try {
+            // 1. Attempt Admin Login first (covers email or username like 'admin12')
+            await authService.loginAdmin(identity, secret);
+            navigate('/');
+        } catch (adminErr) {
+            // 2. If Admin not found (404), try Staff Login
+            if (adminErr.response && adminErr.response.status === 404) {
+                try {
+                    await authService.loginStaff(identity, secret);
+                    navigate('/');
+                } catch (staffErr) {
+                    // Staff also failed (or not found)
+                    setError(staffErr.response?.data?.message || "Authentication Failed");
+                    setSecret('');
+                }
+            } else {
+                // Admin found but wrong password (401) or Server Error
+                setError(adminErr.response?.data?.message || "Authentication Failed");
+                setSecret('');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="min-h-screen w-full relative bg-[#020617] text-slate-200 overflow-hidden font-sans flex items-center justify-center">
+            <PrecisionGrid />
+            <FloatingDiamonds />
+            <DiamondSparkles />
+
+            <div className="relative z-10 w-full max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 px-6 lg:px-12 items-center h-full min-h-[600px]">
+
+                {/* Brand Section - Floating Left */}
+                <motion.div
+                    initial={{ opacity: 0, x: -30 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                    className="flex flex-col items-center lg:items-start text-center lg:text-left space-y-8"
+                >
+                    <div className="relative group p-4">
+                        {/* Soft Glow behind logo */}
+                        <div className="absolute inset-0 bg-blue-500/20 rounded-full blur-3xl group-hover:bg-blue-500/30 transition-all duration-700" />
+
+                        {/* Logo Container with Sheen */}
+                        <div className="relative overflow-hidden rounded-xl">
+                            <img
+                                src="/logo.png"
+                                alt="Balkrushna Exports"
+                                className="h-40 lg:h-56 w-auto object-contain filter brightness-0 invert opacity-95 relative z-10 drop-shadow-2xl"
+                            />
+                            {/* Sheen Animation */}
+                            <motion.div
+                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg]"
+                                animate={{ x: ['-200%', '200%'] }}
+                                transition={{ repeat: Infinity, duration: 3, delay: 1, ease: "easeInOut" }}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4 max-w-lg relative z-20">
+                        <h1 className="text-4xl lg:text-5xl font-bold tracking-tight text-white font-display drop-shadow-lg">
+                            Balkrushna Exports
+                        </h1>
+                        <div className="h-px w-24 bg-gradient-to-r from-blue-500/50 to-transparent mx-auto lg:mx-0" />
+                        <p className="text-blue-100/70 text-lg font-light tracking-wide">
+                            Premium Diamond Inventory Management
+                        </p>
+                    </div>
+                </motion.div>
+
+                {/* Login Form - Floating Glass Right */}
+                <motion.div
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
+                    className="w-full max-w-[450px] mx-auto lg:ml-auto"
+                >
+                    <div className="bg-white/[0.03] backdrop-blur-xl border border-white/10 rounded-3xl p-8 lg:p-10 shadow-2xl relative overflow-hidden group">
+
+                        {/* Form Header */}
+                        <div className="mb-8 space-y-2">
+                            <h2 className="text-2xl font-semibold text-white tracking-wide">Access Portal</h2>
+                            <p className="text-sm text-slate-400">Secure entry for authorized personnel</p>
+                        </div>
+
+                        {/* Error Message */}
+                        <AnimatePresence>
+                            {error && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="mb-6 overflow-hidden"
+                                >
+                                    <div className="bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-3 rounded-xl text-sm flex items-center gap-3">
+                                        <AlertTriangle size={16} />
+                                        <span>{error}</span>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
+                        {/* Form */}
+                        <form onSubmit={handleLogin} className="space-y-6">
+
+                            {/* Identity Field */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold ml-1">Identity</label>
+                                <div className="relative group">
+                                    <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors duration-300 ${focusedField === 'identity' ? 'text-blue-400' : 'text-slate-600'}`}>
+                                        <User className="w-5 h-5" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        value={identity}
+                                        onChange={(e) => setIdentity(e.target.value)}
+                                        onFocus={() => setFocusedField('identity')}
+                                        onBlur={() => setFocusedField(null)}
+                                        autoComplete="off"
+                                        className={`block w-full pl-12 pr-4 py-4 bg-slate-900/40 border rounded-xl text-white placeholder-slate-600 focus:outline-none transition-all duration-300
+                                            ${focusedField === 'identity'
+                                                ? 'border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)] bg-slate-900/60'
+                                                : 'border-white/5 hover:border-white/10'
+                                            }`}
+                                        placeholder="Email or Name"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Secret Field */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] uppercase tracking-widest text-slate-500 font-bold ml-1">Pin / Password</label>
+                                <div className="relative group">
+                                    <div className={`absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors duration-300 ${focusedField === 'secret' ? 'text-blue-400' : 'text-slate-600'}`}>
+                                        <KeyRound className="w-5 h-5" />
+                                    </div>
+                                    <input
+                                        type="password"
+                                        value={secret}
+                                        onChange={(e) => setSecret(e.target.value)}
+                                        onFocus={() => setFocusedField('secret')}
+                                        onBlur={() => setFocusedField(null)}
+                                        autoComplete="off"
+                                        className={`block w-full pl-12 pr-4 py-4 bg-slate-900/40 border rounded-xl text-white placeholder-slate-600 focus:outline-none transition-all duration-300 font-mono tracking-widest
+                                            ${focusedField === 'secret'
+                                                ? 'border-blue-500/40 shadow-[0_0_20px_rgba(59,130,246,0.1)] bg-slate-900/60'
+                                                : 'border-white/5 hover:border-white/10'
+                                            }`}
+                                        placeholder="Enter Password" // Changed from dots to text
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Submit Button */}
+                            <motion.button
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.99 }}
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white font-medium py-4 rounded-xl shadow-lg shadow-blue-900/20 transition-all disabled:opacity-70 disabled:cursor-not-allowed mt-2 flex items-center justify-center gap-2 group/btn"
+                            >
+                                {loading ? (
+                                    <span className="text-sm tracking-wide">Authenticating...</span>
+                                ) : (
+                                    <>
+                                        <span className="text-sm tracking-wide">Enter System</span>
+                                        <ChevronRight size={16} className="opacity-0 group-hover/btn:opacity-100 transform -translate-x-2 group-hover/btn:translate-x-0 transition-all" />
+                                    </>
+                                )}
+                            </motion.button>
+
+                        </form>
+                    </div>
+
+                    <div className="mt-8 text-center" style={{ zIndex: 30, position: 'relative' }}>
+                        <p className="text-slate-500/50 text-[10px] uppercase tracking-widest font-medium">Balkrushna Exports &copy; {new Date().getFullYear()}</p>
+                    </div>
+                </motion.div>
+            </div>
+        </div>
+    );
+};
 
 export default Login;

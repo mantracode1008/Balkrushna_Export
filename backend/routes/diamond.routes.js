@@ -11,8 +11,14 @@ module.exports = function (app) {
     // Fetch Unique Buyers
     router.get("/buyers", [verifyToken], controller.getBuyers);
 
+    // Fetch Unique Companies
+    router.get("/companies", [verifyToken], controller.getCompanies);
+
     // Fetch External
     router.get("/fetch/:certNo", [verifyToken], controller.fetchExternal);
+
+    // Inventory Summary (Must be before dynamic :id routes or root retrieval if specific path needed)
+    router.get("/summary", [verifyToken], controller.getSummary);
 
     // Retrieve all Diamonds
     router.get("/", [verifyToken], controller.findAll);
@@ -39,13 +45,25 @@ module.exports = function (app) {
     router.post("/bulk-delete", [verifyToken], controller.bulkDelete);
 
     // Import Preview
-    router.post("/import-preview", [verifyToken, upload.single("file")], controller.previewImport);
+    router.post("/import-preview", [verifyToken, (req, res, next) => {
+        upload.single("file")(req, res, function (err) {
+            if (err) {
+                console.error("Multer Upload Error:", err);
+                // Return 400 for upload errors
+                return res.status(400).send({ message: typeof err === 'string' ? err : err.message });
+            }
+            next();
+        });
+    }], controller.previewImport);
 
     // Bulk Create (Confirm Import)
     router.post("/bulk-create", [verifyToken], controller.bulkCreate);
 
     // Bulk Update Status
     router.post("/bulk-status", [verifyToken], controller.bulkUpdateStatus);
+
+    // Bulk Sell (Stock -> Client)
+    router.post("/bulk-sell", [verifyToken], controller.bulkSell);
 
 
     app.use('/api/diamonds', router);

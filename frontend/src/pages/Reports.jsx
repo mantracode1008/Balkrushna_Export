@@ -38,10 +38,6 @@ const Reports = () => {
     const [topSelling, setTopSelling] = useState([]);
     const [metrics, setMetrics] = useState({ revenue: 0, profit: 0, margin: 0 });
 
-    useEffect(() => {
-        loadData();
-    }, [range, startDate, endDate]);
-
     const loadData = async () => {
         try {
             const params = { range };
@@ -77,6 +73,13 @@ const Reports = () => {
             console.error("Failed to load reports", err);
         }
     };
+
+    useEffect(() => {
+        loadData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [range, startDate, endDate]);
+
+
 
     const handleExport = () => {
         // Convert reportData to CSV
@@ -189,30 +192,29 @@ const Reports = () => {
 
                 <div className="flex flex-wrap items-center gap-3">
                     {/* Date Range Picker (Simplistic) */}
-                    <div className="flex items-center gap-2 bg-white dark:bg-slate-800 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-sm transition-colors">
+                    <div className="flex items-center gap-2 bg-white  px-3 py-2 rounded-xl border border-slate-200  shadow-sm text-sm transition-colors">
                         <Calendar className="w-4 h-4 text-slate-400" />
                         <input
                             type="date"
-                            className="outline-none text-slate-600 dark:text-slate-300 bg-transparent w-32 [color-scheme:light] dark:[color-scheme:dark]"
+                            className="outline-none text-slate-600  bg-transparent w-32 [color-scheme:light] "
                             value={startDate}
                             onChange={(e) => { setStartDate(e.target.value); setRange('custom'); }}
                         />
-                        <span className="text-slate-300 dark:text-slate-600">|</span>
+                        <span className="text-slate-300 ">|</span>
                         <input
                             type="date"
-                            className="outline-none text-slate-600 dark:text-slate-300 bg-transparent w-32 [color-scheme:light] dark:[color-scheme:dark]"
+                            className="outline-none text-slate-600  bg-transparent w-32 [color-scheme:light] "
                             value={endDate}
                             onChange={(e) => { setEndDate(e.target.value); setRange('custom'); }}
                         />
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-1 flex shadow-sm transition-colors">
+                    <div className="bg-white  rounded-xl border border-slate-200  p-1 flex shadow-sm transition-colors">
                         {['daily', 'monthly', 'yearly'].map(r => (
                             <button
                                 key={r}
                                 onClick={() => { setRange(r); setStartDate(''); setEndDate(''); }}
-                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${range === r ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
-                                    }`}
+                                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${range === r ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
                             >
                                 {r}
                             </button>
@@ -221,7 +223,7 @@ const Reports = () => {
 
                     <button
                         onClick={handleExport}
-                        className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 dark:shadow-indigo-900/20 font-medium text-sm"
+                        className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200  font-medium text-sm"
                     >
                         <Download className="w-4 h-4" /> Export
                     </button>
@@ -230,75 +232,75 @@ const Reports = () => {
 
             {/* Key Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white/70 dark:bg-slate-800/80 backdrop-blur-xl p-6 rounded-2xl border border-white/20 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl transition-all relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-100/50 dark:bg-emerald-500/10 rounded-full blur-2xl -mr-6 -mt-6 group-hover:bg-emerald-200/50 dark:group-hover:bg-emerald-500/20 transition-colors"></div>
+                <div className="bg-white/70  backdrop-blur-xl p-6 rounded-2xl border border-white/20  shadow-lg shadow-slate-200/50  hover:shadow-xl transition-all relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-100/50  rounded-full blur-2xl -mr-6 -mt-6 group-hover:bg-emerald-200/50  transition-colors"></div>
                     <div className="flex justify-between items-start mb-4 relative z-10">
-                        <div className="p-3 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl">
-                            <DollarSign className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                        <div className="p-3 bg-emerald-50  rounded-xl">
+                            <DollarSign className="w-6 h-6 text-emerald-600 " />
                         </div>
-                        <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-lg text-xs font-bold">+12.5%</span>
+                        <span className="text-emerald-600  bg-emerald-50  px-2 py-1 rounded-lg text-xs font-bold">+12.5%</span>
                     </div>
-                    <h3 className="text-slate-500 dark:text-slate-400 font-medium text-sm mb-1">Total Revenue</h3>
-                    <p className="text-3xl font-bold text-slate-800 dark:text-white">${metrics.revenue.toLocaleString()}</p>
+                    <h3 className="text-slate-500  font-medium text-sm mb-1">Total Revenue</h3>
+                    <p className="text-3xl font-bold text-slate-800 ">${metrics.revenue.toLocaleString()}</p>
                 </div>
 
-                <div className="bg-white/70 dark:bg-slate-800/80 backdrop-blur-xl p-6 rounded-2xl border border-white/20 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl transition-all relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100/50 dark:bg-blue-500/10 rounded-full blur-2xl -mr-6 -mt-6 group-hover:bg-blue-200/50 dark:group-hover:bg-blue-500/20 transition-colors"></div>
+                <div className="bg-white/70  backdrop-blur-xl p-6 rounded-2xl border border-white/20  shadow-lg shadow-slate-200/50  hover:shadow-xl transition-all relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-blue-100/50  rounded-full blur-2xl -mr-6 -mt-6 group-hover:bg-blue-200/50  transition-colors"></div>
                     <div className="flex justify-between items-start mb-4 relative z-10">
-                        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-xl">
-                            <TrendingUp className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                        <div className="p-3 bg-blue-50  rounded-xl">
+                            <TrendingUp className="w-6 h-6 text-blue-600 " />
                         </div>
-                        <span className="text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded-lg text-xs font-bold">+8.2%</span>
+                        <span className="text-blue-600  bg-blue-50  px-2 py-1 rounded-lg text-xs font-bold">+8.2%</span>
                     </div>
-                    <h3 className="text-slate-500 dark:text-slate-400 font-medium text-sm mb-1">Net Profit</h3>
-                    <p className="text-3xl font-bold text-slate-800 dark:text-white">${metrics.profit.toLocaleString()}</p>
+                    <h3 className="text-slate-500  font-medium text-sm mb-1">Net Profit</h3>
+                    <p className="text-3xl font-bold text-slate-800 ">${metrics.profit.toLocaleString()}</p>
                 </div>
 
-                <div className="bg-white/70 dark:bg-slate-800/80 backdrop-blur-xl p-6 rounded-2xl border border-white/20 dark:border-slate-700 shadow-lg shadow-slate-200/50 dark:shadow-none hover:shadow-xl transition-all relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-100/50 dark:bg-purple-500/10 rounded-full blur-2xl -mr-6 -mt-6 group-hover:bg-purple-200/50 dark:group-hover:bg-purple-500/20 transition-colors"></div>
+                <div className="bg-white/70  backdrop-blur-xl p-6 rounded-2xl border border-white/20  shadow-lg shadow-slate-200/50  hover:shadow-xl transition-all relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-100/50  rounded-full blur-2xl -mr-6 -mt-6 group-hover:bg-purple-200/50  transition-colors"></div>
                     <div className="flex justify-between items-start mb-4 relative z-10">
-                        <div className="p-3 bg-purple-50 dark:bg-purple-900/30 rounded-xl">
-                            <Package className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                        <div className="p-3 bg-purple-50  rounded-xl">
+                            <Package className="w-6 h-6 text-purple-600 " />
                         </div>
-                        <span className="text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-1 rounded-lg text-xs font-bold">Good</span>
+                        <span className="text-purple-600  bg-purple-50  px-2 py-1 rounded-lg text-xs font-bold">Good</span>
                     </div>
-                    <h3 className="text-slate-500 dark:text-slate-400 font-medium text-sm mb-1">Profit Margin</h3>
-                    <p className="text-3xl font-bold text-slate-800 dark:text-white">{metrics.margin}%</p>
+                    <h3 className="text-slate-500  font-medium text-sm mb-1">Profit Margin</h3>
+                    <p className="text-3xl font-bold text-slate-800 ">{metrics.margin}%</p>
                 </div>
             </div>
 
             {/* Main Chart Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-md border border-slate-100 dark:border-slate-700 transition-colors">
-                    <h3 className="font-bold text-slate-800 dark:text-white text-lg mb-6">Revenue & Profit Trends</h3>
+                <div className="lg:col-span-2 bg-white  p-6 rounded-2xl shadow-md border border-slate-100  transition-colors">
+                    <h3 className="font-bold text-slate-800  text-lg mb-6">Revenue & Profit Trends</h3>
                     <div className="h-[350px]">
                         <Line data={lineChartData} options={chartOptions} />
                     </div>
                 </div>
 
                 {/* Top Selling Items (Mini Table) */}
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-md border border-slate-100 dark:border-slate-700 flex flex-col transition-colors">
-                    <h3 className="font-bold text-slate-800 dark:text-white text-lg mb-4">Top Sold Items</h3>
+                <div className="bg-white  p-6 rounded-2xl shadow-md border border-slate-100  flex flex-col transition-colors">
+                    <h3 className="font-bold text-slate-800  text-lg mb-4">Top Sold Items</h3>
                     <div className="flex-1 overflow-auto">
                         <table className="w-full text-left">
-                            <thead className="bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            <thead className="bg-slate-50  text-xs font-bold text-slate-500  uppercase tracking-wider">
                                 <tr>
                                     <th className="px-4 py-3 rounded-l-lg">Diamond</th>
                                     <th className="px-4 py-3 text-right">Profit</th>
                                     <th className="px-4 py-3 rounded-r-lg text-right">Rev</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-50 dark:divide-slate-700 text-sm">
+                            <tbody className="divide-y divide-slate-50  text-sm">
                                 {topSelling.map((item, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 group transition-colors">
+                                    <tr key={idx} className="hover:bg-slate-50  group transition-colors">
                                         <td className="px-4 py-3">
-                                            <div className="font-semibold text-slate-800 dark:text-slate-200">{item.diamond ? item.diamond.shape : 'Unknown'}</div>
+                                            <div className="font-semibold text-slate-800 ">{item.diamond ? item.diamond.shape : 'Unknown'}</div>
                                             <div className="text-xs text-slate-400">{item.diamond ? `${item.diamond.carat}ct • ${item.diamond.color}` : '-'}</div>
                                         </td>
-                                        <td className="px-4 py-3 text-right font-medium text-emerald-600 dark:text-emerald-400">
+                                        <td className="px-4 py-3 text-right font-medium text-emerald-600 ">
                                             ${item.totalProfit}
                                         </td>
-                                        <td className="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">
+                                        <td className="px-4 py-3 text-right font-medium text-slate-600 ">
                                             ${item.totalRevenue}
                                         </td>
                                     </tr>
@@ -311,20 +313,20 @@ const Reports = () => {
                             </tbody>
                         </table>
                     </div>
-                    <button className="w-full mt-4 py-2 text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-colors">
+                    <button className="w-full mt-4 py-2 text-sm text-indigo-600  font-medium hover:bg-indigo-50  rounded-lg transition-colors">
                         View All Sales
                     </button>
                 </div>
             </div>
 
             {/* Detailed Data Table */}
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 overflow-hidden transition-colors">
-                <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-                    <h3 className="font-bold text-slate-800 dark:text-white">Detailed Report Data</h3>
-                    <span className="text-xs font-medium bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded-md">{reportData.length} records</span>
+            <div className="bg-white  rounded-2xl shadow-sm border border-slate-100  overflow-hidden transition-colors">
+                <div className="px-6 py-4 border-b border-slate-100  flex justify-between items-center bg-slate-50/50 ">
+                    <h3 className="font-bold text-slate-800 ">Detailed Report Data</h3>
+                    <span className="text-xs font-medium bg-slate-200  text-slate-600  px-2 py-1 rounded-md">{reportData.length} records</span>
                 </div>
                 <table className="w-full text-left">
-                    <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-semibold text-sm">
+                    <thead className="bg-slate-50  border-b border-slate-100  text-slate-500  font-semibold text-sm">
                         <tr>
                             <th className="px-6 py-4">Date/Period</th>
                             <th className="px-6 py-4">Revenue</th>
@@ -332,16 +334,16 @@ const Reports = () => {
                             <th className="px-6 py-4 text-right">Margin</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700 text-sm">
+                    <tbody className="divide-y divide-slate-100  text-sm">
                         {reportData.map((row, idx) => {
                             const rowMargin = row.revenue > 0 ? ((row.profit / row.revenue) * 100).toFixed(1) : 0;
                             return (
-                                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                    <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-200">{row.date}</td>
-                                    <td className="px-6 py-4 text-slate-600 dark:text-slate-400">${row.revenue}</td>
-                                    <td className="px-6 py-4 text-emerald-600 dark:text-emerald-400 font-semibold">+ ${row.profit}</td>
+                                <tr key={idx} className="hover:bg-slate-50  transition-colors">
+                                    <td className="px-6 py-4 font-medium text-slate-700 ">{row.date}</td>
+                                    <td className="px-6 py-4 text-slate-600 ">${row.revenue}</td>
+                                    <td className="px-6 py-4 text-emerald-600  font-semibold">+ ${row.profit}</td>
                                     <td className="px-6 py-4 text-right">
-                                        <span className={`px-2 py-1 rounded text-xs font-bold ${rowMargin > 20 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${rowMargin > 20 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                                             {rowMargin}%
                                         </span>
                                     </td>

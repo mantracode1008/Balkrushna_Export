@@ -7,6 +7,8 @@ module.exports = function (app) {
     router.post("/", [verifyToken], controller.create);
     router.get("/", [verifyToken], controller.findAll);
     router.get("/:id/pdf", [verifyToken], controller.getJwt);
+    router.get("/:id/excel", [verifyToken], controller.exportExcel); // Single Export
+    router.post("/export-excel", [verifyToken], controller.exportExcel); // Bulk Export
     router.delete("/reset", [verifyToken], controller.deleteAll);
     router.delete("/:id", [verifyToken], controller.delete);
 

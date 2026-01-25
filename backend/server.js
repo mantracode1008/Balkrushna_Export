@@ -13,9 +13,9 @@ var corsOptions = {
 
 app.use(cors(corsOptions));
 // parse requests of content-type - application/json
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 // parse requests of content-type - application/x-www-form-urlencoded
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/invoices', express.static('uploads/invoices')); // Serve invoices statically
 
 // simple route
@@ -26,10 +26,9 @@ app.get("/", (req, res) => {
 // Sync DB
 const authController = require("./controllers/auth.controller");
 console.log("Syncing database...");
-db.diamonds.sync({ alter: true })
+db.sequelize.sync({ alter: true })
     .then(() => {
-        console.log("Diamonds table synced.");
-        return db.sequelize.sync({ alter: false });
+        console.log("Database synced.");
     })
     .then(() => {
         // Create initial admin if not exists
@@ -45,6 +44,8 @@ require("./routes/diamond.routes")(app);
 require("./routes/invoice.routes")(app);
 require("./routes/report.routes")(app);
 require("./routes/pricing.routes")(app);
+require("./routes/company.routes")(app);
+require("./routes/client.routes")(app);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

@@ -6,9 +6,26 @@ const Op = db.Sequelize.Op;
 
 exports.getDashboardStats = async (req, res) => {
     try {
+        // RBAC Filters
+        // RBAC Filters
+        const diamondFilter = { status: 'in_stock' };
+        const invoiceFilter = {};
+
+        // Admin Filter by Staff (if provided)
+        if (req.userRole === 'admin' && req.query.staffId) {
+            const staffId = parseInt(req.query.staffId);
+            diamondFilter.created_by = staffId;
+            invoiceFilter.created_by = staffId;
+        }
+        // Staff Force Filter
+        else if (req.userRole === 'staff') {
+            diamondFilter.created_by = req.userId;
+            invoiceFilter.created_by = req.userId;
+        }
+
         // 1. Inventory Value (Cost Price of In Stock)
         const inventoryRes = await Diamond.findAll({
-            where: { status: 'in_stock' },
+            where: diamondFilter,
             attributes: [
                 [sequelize.fn('SUM', sequelize.literal('price * quantity')), 'totalValue']
             ],
@@ -17,15 +34,21 @@ exports.getDashboardStats = async (req, res) => {
         const inventoryValue = inventoryRes[0].totalValue || 0;
 
         // 1.5 Total Inventory Count (In Stock)
-        const inventoryCount = await Diamond.count({ where: { status: 'in_stock' } });
+        const inventoryCount = await Diamond.count({ where: diamondFilter });
 
         // 2. Total Sold Count
-        const soldCount = await Diamond.count({ where: { status: 'sold' } });
+        const soldCondition = { status: 'sold' };
+
+        if (req.userRole === 'admin' && req.query.staffId) {
+            soldCondition.created_by = parseInt(req.query.staffId);
+        } else if (req.userRole === 'staff') {
+            soldCondition.created_by = req.userId;
+        }
+        const soldCount = await Diamond.count({ where: soldCondition });
 
         // 3. Total Revenue & Profit (From Invoices)
-        // Ensure we only sum up valid invoices if needed, but basic SUM is fine.
-        // It will return null if no rows, so we default to 0.
         const financials = await Invoice.findAll({
+            where: invoiceFilter,
             attributes: [
                 [sequelize.fn('SUM', sequelize.col('total_amount')), 'totalRevenue'],
                 [sequelize.fn('SUM', sequelize.col('total_profit')), 'totalProfit']
@@ -33,12 +56,12 @@ exports.getDashboardStats = async (req, res) => {
             raw: true
         });
 
-        const totalRevenue = financials[0].totalRevenue || 0;
-        const totalProfit = financials[0].totalProfit || 0;
+        const totalRevenue = (financials && financials.length > 0) ? financials[0].totalRevenue || 0 : 0;
+        const totalProfit = (financials && financials.length > 0) ? financials[0].totalProfit || 0 : 0;
 
-        // 4. Shape Distribution (All Diamonds or In-Stock? Usually Inventory breakdown is for In-Stock)
+        // 4. Shape Distribution
         const shapeDist = await Diamond.findAll({
-            where: { status: 'in_stock' },
+            where: diamondFilter,
             attributes: [
                 'shape',
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
@@ -47,9 +70,9 @@ exports.getDashboardStats = async (req, res) => {
             raw: true
         });
 
-        // 5. Color Distribution (In-Stock)
+        // 5. Color Distribution
         const colorDist = await Diamond.findAll({
-            where: { status: 'in_stock' },
+            where: diamondFilter,
             attributes: [
                 'color',
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
@@ -58,9 +81,9 @@ exports.getDashboardStats = async (req, res) => {
             raw: true
         });
 
-        // 6. Clarity Distribution (In-Stock) - NEW
+        // 6. Clarity Distribution
         const clarityDist = await Diamond.findAll({
-            where: { status: 'in_stock' },
+            where: diamondFilter,
             attributes: [
                 'clarity',
                 [sequelize.fn('COUNT', sequelize.col('id')), 'count']
@@ -69,17 +92,15 @@ exports.getDashboardStats = async (req, res) => {
             raw: true
         });
 
-
-
         res.json({
             inventoryValue,
-            inventoryCount, // New field
+            inventoryCount,
             soldCount,
             totalRevenue,
             totalProfit,
             shapeDistribution: shapeDist,
             colorDistribution: colorDist,
-            clarityDistribution: clarityDist // New Data
+            clarityDistribution: clarityDist
         });
     } catch (err) {
         console.error("Stats Error:", err);
@@ -119,6 +140,9 @@ exports.getReports = async (req, res) => {
         ];
 
         const whereClause = {};
+        if (req.userRole === 'staff') {
+            whereClause.created_by = req.userId;
+        }
         if (startDate && endDate) {
             whereClause.invoice_date = {
                 [Op.between]: [new Date(startDate), new Date(endDate)]
