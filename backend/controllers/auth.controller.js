@@ -146,8 +146,8 @@ exports.createStaff = async (req, res) => {
 exports.getAllStaff = async (req, res) => {
     try {
         const staff = await Admin.findAll({
-            where: { role: 'staff' },
-            attributes: ['id', 'name', 'mobile', 'address', 'staff_id', 'createdAt', 'failed_attempts'],
+            // Fetch ALL users (Staff + Admin) so Admin can filter by anyone
+            attributes: ['id', 'name', 'mobile', 'address', 'staff_id', 'role', 'createdAt', 'failed_attempts'],
             order: [['createdAt', 'DESC']]
         });
         res.status(200).send(staff);

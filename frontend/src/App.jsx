@@ -9,6 +9,7 @@ import Reports from './pages/Reports';
 import SalesHistory from './pages/SalesHistory';
 import Order from './pages/Order';
 import StaffManagement from './pages/StaffManagement';
+import ClientPayments from './pages/ClientPayments';
 import InvoicePrint from './components/InvoicePrint';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
@@ -78,6 +79,14 @@ const App = () => {
             <Route path="/staff" element={
               <ProtectedRoute>
                 <StaffManagement />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/payments" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <ClientPayments />
+                </MainLayout>
               </ProtectedRoute>
             } />
 

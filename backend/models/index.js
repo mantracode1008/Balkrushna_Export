@@ -36,7 +36,7 @@ db.invoiceItems.belongsTo(db.invoices, {
     as: "invoice",
 });
 
-db.diamonds.hasOne(db.invoiceItems, { as: "saleItem" });
+db.diamonds.hasOne(db.invoiceItems, { foreignKey: "diamondId", as: "saleItem" });
 db.invoiceItems.belongsTo(db.diamonds, {
     foreignKey: "diamondId",
     as: "diamond",
@@ -52,5 +52,8 @@ db.diamonds.belongsTo(db.clients, { foreignKey: "client_id", as: "buyer" });
 // Staff/Admin Associations
 db.admins.hasMany(db.diamonds, { foreignKey: "created_by", as: "createdDiamonds" });
 db.diamonds.belongsTo(db.admins, { foreignKey: "created_by", as: "creator" });
+
+db.admins.hasMany(db.invoices, { foreignKey: "created_by", as: "createdInvoices" });
+db.invoices.belongsTo(db.admins, { foreignKey: "created_by", as: "creator" });
 
 module.exports = db;

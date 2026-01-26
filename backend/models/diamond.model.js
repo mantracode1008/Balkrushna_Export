@@ -134,6 +134,9 @@ module.exports = (sequelize, Sequelize) => {
         sale_price: { // Actual Selling Price
             type: Sequelize.DECIMAL(10, 2)
         },
+        sold_by: { // Tracker for who sold it
+            type: Sequelize.INTEGER
+        },
         growth_process: {
             type: Sequelize.STRING
         },

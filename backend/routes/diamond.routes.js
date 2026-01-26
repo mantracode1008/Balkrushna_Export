@@ -14,6 +14,9 @@ module.exports = function (app) {
     // Fetch Unique Companies
     router.get("/companies", [verifyToken], controller.getCompanies);
 
+    // Fetch Unique Locations
+    router.get("/locations", [verifyToken], controller.getLocations);
+
     // Fetch External
     router.get("/fetch/:certNo", [verifyToken], controller.fetchExternal);
 

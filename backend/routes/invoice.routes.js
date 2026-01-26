@@ -10,6 +10,8 @@ module.exports = function (app) {
     router.get("/:id/excel", [verifyToken], controller.exportExcel); // Single Export
     router.post("/export-excel", [verifyToken], controller.exportExcel); // Bulk Export
     router.delete("/reset", [verifyToken], controller.deleteAll);
+    router.put("/:id/status", [verifyToken], controller.updateStatus);
+    router.post("/:id/payment", [verifyToken], controller.addPayment);
     router.delete("/:id", [verifyToken], controller.delete);
 
     app.use('/api/invoices', router);

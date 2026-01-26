@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Diamond, FileText, BarChart3, LogOut, Hexagon, ShoppingCart, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, Diamond, FileText, BarChart3, LogOut, Hexagon, ShoppingCart, Users, Settings, CheckCircle2 } from 'lucide-react';
 import authService from '../services/auth.service';
 
 const Sidebar = () => {
@@ -18,6 +18,7 @@ const Sidebar = () => {
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/inventory', label: 'Inventory', icon: Diamond },
         { path: '/invoices', label: 'Invoices', icon: FileText },
+        { path: '/payments', label: 'Payments', icon: CheckCircle2 }, // New Link
         { path: '/history', label: 'History', icon: Hexagon }, // Reuse Hexagon or other icon
     ];
 

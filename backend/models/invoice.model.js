@@ -37,6 +37,33 @@ module.exports = (sequelize, Sequelize) => {
         },
         final_amount_inr: {
             type: Sequelize.DECIMAL(10, 2)
+        },
+        payment_status: {
+            type: Sequelize.ENUM('Pending', 'Paid', 'Partial', 'Overdue', 'Cancelled'),
+            defaultValue: 'Pending'
+        },
+        remarks: {
+            type: Sequelize.TEXT
+        },
+        payment_terms: {
+            type: Sequelize.STRING
+        },
+        due_days: {
+            type: Sequelize.INTEGER,
+            defaultValue: 0
+        },
+        due_date: {
+            type: Sequelize.DATE
+        },
+        paid_amount: {
+            type: Sequelize.DECIMAL(10, 2),
+            defaultValue: 0
+        },
+        balance_due: {
+            type: Sequelize.DECIMAL(10, 2)
+        },
+        payment_history: {
+            type: Sequelize.JSON // [{ date, amount, mode, note }]
         }
     });
 

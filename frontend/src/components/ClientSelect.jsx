@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, ChevronsUpDown, Plus, Building2 } from 'lucide-react';
+import { Check, Building2, Plus, ChevronDown } from 'lucide-react';
 
-const ClientSelect = ({ value, onChange, options = [], placeholder = "Select Client..." }) => {
+const ClientSelect = ({ value, onChange, options = [], placeholder = "Search or select client..." }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [query, setQuery] = useState('');
     const wrapperRef = useRef(null);
 
-    // Filter options based on query
     const filteredOptions = query === ''
         ? options
-        : options.filter((person) => {
-            return person.buyer_name.toLowerCase().includes(query.toLowerCase());
-        });
+        : options.filter((person) => person.buyer_name.toLowerCase().includes(query.toLowerCase()));
 
-    // Handle outside click to close
     useEffect(() => {
         function handleClickOutside(event) {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
@@ -24,28 +20,25 @@ const ClientSelect = ({ value, onChange, options = [], placeholder = "Select Cli
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [wrapperRef]);
 
-
-
-
     const handleSelect = (name) => {
-        onChange({ target: { name: 'buyer_name', value: name } }); // Mock event object to match existing handleChange signature
+        onChange({ target: { name: 'buyer_name', value: name } });
         setIsOpen(false);
         setQuery(name);
     };
 
     return (
         <div className="w-full relative" ref={wrapperRef}>
-            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-0.5 block">Client Name *</label>
-            <div className="relative">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">Client Relationship *</label>
+            <div className="relative group">
                 <div
-                    className="w-full flex items-center bg-white border border-slate-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all"
+                    className="w-full flex items-center bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:ring-4 focus-within:ring-indigo-500/10 focus-within:border-indigo-500 transition-all shadow-sm shadow-slate-100/50"
                     onClick={() => setIsOpen(true)}
                 >
-                    <div className="pl-3 text-slate-400">
-                        <Building2 className="w-4 h-4" />
+                    <div className="pl-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                        <Building2 size={16} strokeWidth={2.5} />
                     </div>
                     <input
-                        className="w-full py-2 px-3 text-xs font-bold text-slate-700 outline-none placeholder:font-normal placeholder:text-slate-400"
+                        className="w-full py-2.5 px-3 text-sm font-semibold text-slate-700 outline-none placeholder:font-medium placeholder:text-slate-300 bg-transparent"
                         placeholder={placeholder}
                         value={isOpen ? query : (value || '')}
                         onChange={(e) => {
@@ -57,41 +50,49 @@ const ClientSelect = ({ value, onChange, options = [], placeholder = "Select Cli
                             setIsOpen(true);
                         }}
                     />
-                    {/* Arrow Icon */}
-                    {/* <div className="pr-2 text-slate-400">
-                        <ChevronsUpDown className="w-4 h-4" />
-                    </div> */}
+                    <div className="pr-4 text-slate-300">
+                        <ChevronDown size={14} />
+                    </div>
                 </div>
 
-                {/* Dropdown Menu */}
                 {isOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-white rounded-lg shadow-xl border border-slate-100 max-h-60 overflow-auto py-1 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 max-h-64 overflow-auto py-2 animate-in fade-in zoom-in-95 duration-200">
                         {filteredOptions.length === 0 && query !== '' ? (
                             <div
-                                className="px-4 py-3 cursor-pointer hover:bg-slate-50 text-blue-600 font-bold text-xs flex items-center gap-2 border-t border-slate-100"
+                                className="px-5 py-3 cursor-pointer hover:bg-slate-50 text-indigo-600 font-bold text-xs flex items-center gap-2 border-t border-slate-50 mt-1"
                                 onClick={() => handleSelect(query)}
                             >
-                                <Plus className="w-4 h-4" />
-                                Add "{query}"
+                                <Plus size={14} strokeWidth={3} />
+                                Register "{query}" as New Client
                             </div>
                         ) : (
                             filteredOptions.map((person, idx) => (
                                 <div
                                     key={idx}
-                                    className={`px-4 py-2 cursor-pointer hover:bg-slate-50 text-xs font-medium text-slate-700 flex justify-between items-center ${value === person.buyer_name ? 'bg-blue-50 text-blue-700' : ''}`}
+                                    className={`px-5 py-2.5 cursor-pointer hover:bg-slate-50 text-xs font-semibold text-slate-600 flex justify-between items-center ${value === person.buyer_name ? 'bg-indigo-50 text-indigo-700' : ''}`}
                                     onClick={() => handleSelect(person.buyer_name)}
                                 >
-                                    <span>{person.buyer_name}</span>
-                                    {value === person.buyer_name && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                                    <span>{person.buyer_name} <span className="text-slate-400 font-normal">({person.buyer_country || 'N/A'})</span></span>
+                                    {value === person.buyer_name && <Check size={14} strokeWidth={3} className="text-indigo-600" />}
                                 </div>
                             ))
                         )}
-                        {/* Always show Add New option at bottom if query is unique? User request implies showing it specifically when no results. */}
+                        {filteredOptions.length > 0 && query !== '' && !filteredOptions.some(p => p.buyer_name.toLowerCase() === query.toLowerCase()) && (
+                            <div
+                                className="px-5 py-3 cursor-pointer hover:bg-slate-50 text-indigo-600 font-bold text-xs flex items-center gap-2 border-t border-slate-50 mt-1"
+                                onClick={() => handleSelect(query)}
+                            >
+                                <Plus size={14} strokeWidth={3} />
+                                Register "{query}" as New Client
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
-            {/* Helper text */}
-            <p className="text-[9px] text-slate-400 mt-0.5 ml-1">Select existing or type to add new.</p>
+            <p className="text-[9px] font-bold text-slate-400 mt-1.5 ml-1 flex items-center gap-1">
+                <span className="w-1 h-1 rounded-full bg-indigo-400" />
+                Select from vault or type unique name to register
+            </p>
         </div>
     );
 };

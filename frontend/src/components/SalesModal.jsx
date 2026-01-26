@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, CheckCircle, Calculator, User, DollarSign, Building2 } from 'lucide-react';
 import ClientSelect from './ClientSelect';
 import ClientForm from './ClientForm';
@@ -19,11 +19,15 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
     const [financials, setFinancials] = useState({
         currency: 'USD',
         exchange_rate: '',
+        commission_percent: '',
         commission_usd: '',
         commission_inr: '',
         final_total_usd: '',
         final_total_inr: ''
     });
+
+    const [paymentTerms, setPaymentTerms] = useState('Net 30');
+    const [dueDays, setDueDays] = useState(30);
 
     // Load Clients
     useEffect(() => {
@@ -42,10 +46,88 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
         return sum + cost;
     }, 0);
 
+    // Helper function to recalculate all financial fields
+    const recalculateFinancials = useCallback((currentFinancials, baseCost, changedField, value) => {
+        let newFinancials = { ...currentFinancials };
+
+        const rate = parseFloat(newFinancials.exchange_rate) || 0;
+
+        // Update the changed field first
+        if (changedField === 'commission_percent') {
+            newFinancials.commission_percent = value;
+            const pct = parseFloat(value) || 0;
+            const commUSD = (baseCost * pct) / 100;
+            newFinancials.commission_usd = commUSD.toFixed(2);
+            newFinancials.commission_inr = (commUSD * rate).toFixed(2);
+        } else if (changedField === 'commission_usd') {
+            newFinancials.commission_usd = value;
+            const commUSD = parseFloat(value) || 0;
+            newFinancials.commission_percent = baseCost > 0 ? ((commUSD / baseCost) * 100).toFixed(2) : '';
+            newFinancials.commission_inr = (commUSD * rate).toFixed(2);
+        } else if (changedField === 'commission_inr') {
+            newFinancials.commission_inr = value;
+            const commInr = parseFloat(value) || 0;
+            const commUSD = rate > 0 ? (commInr / rate) : 0;
+            newFinancials.commission_usd = commUSD.toFixed(2);
+            newFinancials.commission_percent = baseCost > 0 ? ((commUSD / baseCost) * 100).toFixed(2) : '';
+        } else if (changedField === 'exchange_rate') {
+            newFinancials.exchange_rate = value;
+            const newRate = parseFloat(value) || 0;
+            const commUSD = parseFloat(newFinancials.commission_usd) || 0;
+            newFinancials.commission_inr = (commUSD * newRate).toFixed(2);
+        } else if (changedField === 'final_total_usd') {
+            newFinancials.final_total_usd = value;
+            const finalUSD = parseFloat(value) || 0;
+            newFinancials.final_total_inr = (finalUSD * rate).toFixed(2);
+        } else if (changedField === 'final_total_inr') {
+            newFinancials.final_total_inr = value;
+            const finalInr = parseFloat(value) || 0;
+            newFinancials.final_total_usd = rate > 0 ? (finalInr / rate).toFixed(2) : '';
+        }
+
+        // Ensure final totals are consistent after commission/rate changes
+        const currentCommUSD = parseFloat(newFinancials.commission_usd) || 0;
+        const calculatedTotalUSD = baseCost + currentCommUSD;
+
+        // Only update final_total_usd/inr if they haven't been manually overridden
+        // Or if the change was to commission/rate, then recalculate them
+        if (!changedField || changedField.startsWith('commission') || changedField === 'exchange_rate') {
+            newFinancials.final_total_usd = calculatedTotalUSD.toFixed(2);
+            newFinancials.final_total_inr = (calculatedTotalUSD * (parseFloat(newFinancials.exchange_rate) || 0)).toFixed(2);
+        }
+
+        return newFinancials;
+    }, []);
+
+    // Auto-Calculate Totals when Base Cost changes
+    useEffect(() => {
+        // When base cost changes, if commission_percent is set, re-calculate commission_usd and others
+        if (financials.commission_percent) {
+            setFinancials(prev => recalculateFinancials(prev, totalBaseCost, 'commission_percent', prev.commission_percent));
+        } else {
+            // Otherwise, just update final totals based on existing commission_usd
+            setFinancials(prev => recalculateFinancials(prev, totalBaseCost, null, null));
+        }
+    }, [totalBaseCost, financials.commission_percent, recalculateFinancials]); // Add recalculateFinancials to dependencies
+
+    // Data Step 2 (Extras)
+    // Custom Currency State
+    const [isCustomCurrency, setIsCustomCurrency] = useState(false);
+
+    // Auto-Set Currency from Client
+    useEffect(() => {
+        if (clientMode === 'EXISTING' && selectedClientName) {
+            const client = existingClients.find(c => c.name === selectedClientName);
+            if (client && client.currency) {
+                setFinancials(prev => ({ ...prev, currency: client.currency }));
+            }
+        }
+    }, [selectedClientName, clientMode, existingClients]);
+
     const handleNext = () => {
         if (step === 1) {
             if (clientMode === 'EXISTING' && !selectedClientName) return alert("Please select a client.");
-            if (clientMode === 'NEW' && !newClientData.name) return alert("Please fill client details.");
+            if (clientMode === 'NEW' && (!newClientData.name || !newClientData.contact_number)) return alert("Please fill client details (Name & Contact Number).");
             setStep(2);
         } else {
             handleSubmit();
@@ -75,11 +157,14 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
                 financials: {
                     currency: financials.currency,
                     exchange_rate: parseFloat(financials.exchange_rate) || 1,
+                    commission_percent: parseFloat(financials.commission_percent) || 0,
                     commission_total_usd: parseFloat(financials.commission_usd) || 0,
                     commission_total_inr: parseFloat(financials.commission_inr) || 0,
                     final_total_usd: parseFloat(financials.final_total_usd) || totalBaseCost,
                     final_total_inr: parseFloat(financials.final_total_inr) || 0
-                }
+                },
+                payment_terms: paymentTerms,
+                due_days: dueDays
             };
 
             await diamondService.bulkSell(payload);
@@ -176,14 +261,44 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
                                 <div className="flex gap-4">
                                     <div className="flex-1">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Currency</label>
-                                        <select
-                                            value={financials.currency}
-                                            onChange={(e) => setFinancials({ ...financials, currency: e.target.value })}
-                                            className="w-full px-3 py-2 text-xs font-bold border rounded-lg bg-slate-50"
-                                        >
-                                            <option value="USD">USD</option>
-                                            <option value="INR">INR</option>
-                                        </select>
+                                        {!isCustomCurrency ? (
+                                            <select
+                                                value={['USD', 'INR', 'EUR', 'AED'].includes(financials.currency) ? financials.currency : 'OTHER'}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    if (val === 'OTHER') {
+                                                        setIsCustomCurrency(true);
+                                                        setFinancials(prev => ({ ...prev, currency: '' }));
+                                                    } else {
+                                                        setFinancials(prev => ({ ...prev, currency: val }));
+                                                    }
+                                                }}
+                                                className="w-full px-3 py-2 text-xs font-bold border rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                            >
+                                                <option value="USD">USD</option>
+                                                <option value="INR">INR</option>
+                                                <option value="EUR">EUR</option>
+                                                <option value="AED">AED</option>
+                                                <option value="OTHER">+ Add Custom</option>
+                                            </select>
+                                        ) : (
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    autoFocus
+                                                    placeholder="e.g. GBP"
+                                                    value={financials.currency}
+                                                    onChange={(e) => setFinancials(prev => ({ ...prev, currency: e.target.value.toUpperCase() }))}
+                                                    className="w-full px-3 py-2 text-xs font-bold border rounded-lg bg-white outline-none focus:ring-2 focus:ring-indigo-500/20 uppercase"
+                                                />
+                                                <button
+                                                    onClick={() => setIsCustomCurrency(false)}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                                >
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="flex-1">
                                         <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Rate (1$)</label>
@@ -192,73 +307,123 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
                                             className="w-full px-3 py-2 text-xs font-bold border rounded-lg bg-slate-50"
                                             placeholder="e.g. 85.0"
                                             value={financials.exchange_rate}
-                                            onChange={(e) => setFinancials({ ...financials, exchange_rate: e.target.value })}
+                                            onChange={(e) => setFinancials(prev => recalculateFinancials(prev, totalBaseCost, 'exchange_rate', e.target.value))}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Comm (%)</label>
+                                        <input
+                                            type="number"
+                                            className="w-full px-3 py-2 text-sm font-bold border rounded-lg bg-slate-50 focus:ring-2 focus:ring-indigo-500/10 outline-none"
+                                            value={financials.commission_percent}
+                                            onChange={(e) => setFinancials(prev => recalculateFinancials(prev, totalBaseCost, 'commission_percent', e.target.value))}
+                                            placeholder="%"
+                                        />
+                                    </div>
                                     <div>
                                         <label className="text-[10px] font-bold text-emerald-600 uppercase mb-1 block">Comm ($)</label>
                                         <input
                                             type="number"
                                             className="w-full px-3 py-2 text-sm font-bold border-2 border-emerald-100 rounded-lg focus:border-emerald-500 outline-none"
                                             value={financials.commission_usd}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                const rate = parseFloat(financials.exchange_rate) || 0;
-                                                setFinancials(prev => ({
-                                                    ...prev,
-                                                    commission_usd: val,
-                                                    commission_inr: (val && rate) ? (parseFloat(val) * rate).toFixed(2) : ''
-                                                }));
-                                            }}
+                                            onChange={(e) => setFinancials(prev => recalculateFinancials(prev, totalBaseCost, 'commission_usd', e.target.value))}
                                             placeholder="0"
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold text-emerald-600 uppercase mb-1 block">Comm (₹)</label>
+                                        <label className="text-[10px] font-bold text-emerald-600 uppercase mb-1 block">Comm ({financials.currency})</label>
                                         <input
                                             type="number"
                                             className="w-full px-3 py-2 text-sm font-bold border-2 border-emerald-100 rounded-lg focus:border-emerald-500 outline-none"
                                             value={financials.commission_inr}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                const rate = parseFloat(financials.exchange_rate) || 0;
-                                                setFinancials(prev => ({
-                                                    ...prev,
-                                                    commission_inr: val,
-                                                    commission_usd: (val && rate) ? (parseFloat(val) / rate).toFixed(2) : ''
-                                                }));
-                                            }}
+                                            onChange={(e) => setFinancials(prev => recalculateFinancials(prev, totalBaseCost, 'commission_inr', e.target.value))}
                                             placeholder="0"
                                         />
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-slate-100">
-                                    <label className="text-xs font-black text-slate-800 uppercase mb-2 block">Final Payable Amount (USD)</label>
-                                    <input
-                                        type="number"
-                                        className="w-full px-4 py-3 text-xl font-bold bg-slate-900 text-white rounded-xl outline-none"
-                                        value={financials.final_total_usd}
+                            </div>
+
+                            {/* Payment Terms */}
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Payment Terms</label>
+                                    <select
+                                        value={paymentTerms}
                                         onChange={(e) => {
                                             const val = e.target.value;
-                                            const rate = parseFloat(financials.exchange_rate) || 0;
+                                            setPaymentTerms(val);
+                                            if (val === 'COD') setDueDays(0);
+                                            else if (val === 'Net 7') setDueDays(7);
+                                            else if (val === 'Net 15') setDueDays(15);
+                                            else if (val === 'Net 30') setDueDays(30);
+                                        }}
+                                        className="w-full px-3 py-2 text-xs font-bold border rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                    >
+                                        <option value="COD">COD (Immediate)</option>
+                                        <option value="Net 7">Net 7 Days</option>
+                                        <option value="Net 15">Net 15 Days</option>
+                                        <option value="Net 30">Net 30 Days</option>
+                                        <option value="Custom">Custom</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Due Days</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="number"
+                                            value={dueDays}
+                                            onChange={(e) => setDueDays(parseInt(e.target.value) || 0)}
+                                            disabled={paymentTerms !== 'Custom'}
+                                            className={`w-20 px-3 py-2 text-xs font-bold border rounded-lg outline-none ${paymentTerms !== 'Custom' ? 'bg-slate-100 text-slate-400' : 'bg-white focus:ring-2 focus:ring-indigo-500/20'}`}
+                                        />
+                                        <div className="px-3 py-2 text-xs font-bold bg-slate-100 text-slate-500 rounded-lg flex items-center">
+                                            Due: {(() => {
+                                                const d = new Date();
+                                                d.setDate(d.getDate() + (parseInt(dueDays) || 0));
+                                                return d.toLocaleDateString();
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-100">
+                                <label className="text-xs font-black text-slate-800 uppercase mb-2 block">
+                                    Final Payable Amount ({financials.currency})
+                                </label>
+                                <input
+                                    type="number"
+                                    className="w-full px-4 py-3 text-xl font-bold bg-slate-900 text-white rounded-xl outline-none"
+                                    value={financials.currency === 'USD' ? financials.final_total_usd : financials.final_total_inr}
+                                    onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        const rate = parseFloat(financials.exchange_rate) || 1;
+
+                                        if (financials.currency === 'USD') {
                                             setFinancials(prev => ({
                                                 ...prev,
-                                                final_total_usd: val,
-                                                final_total_inr: (val && rate) ? (parseFloat(val) * rate).toFixed(2) : ''
+                                                final_total_usd: e.target.value,
+                                                final_total_inr: (val * rate).toFixed(2)
                                             }));
-                                        }}
-                                        placeholder={(totalBaseCost + (parseFloat(financials.commission_usd) || 0)).toFixed(2)}
-                                    />
-                                    {financials.final_total_inr && (
-                                        <p className="text-right text-xs font-bold text-slate-500 mt-2">
-                                            ~ ₹ {parseFloat(financials.final_total_inr).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                        </p>
-                                    )}
-                                </div>
+                                        } else {
+                                            setFinancials(prev => ({
+                                                ...prev,
+                                                final_total_inr: e.target.value,
+                                                final_total_usd: (val / rate).toFixed(2)
+                                            }));
+                                        }
+                                    }}
+                                    placeholder="0.00"
+                                />
+                                {financials.currency !== 'USD' && (
+                                    <p className="text-right text-xs font-bold text-slate-500 mt-2">
+                                        = ${parseFloat(financials.final_total_usd || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
+                                    </p>
+                                )}
                             </div>
                         </div>
                     )}
@@ -280,7 +445,7 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

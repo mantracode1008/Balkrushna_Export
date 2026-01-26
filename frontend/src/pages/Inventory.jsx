@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import diamondService from '../services/diamond.service';
-import { Plus, Upload, Search, Trash2, Edit2, ShoppingCart, X, CheckCircle, Filter, ChevronDown, Download, RefreshCw, LayoutGrid, List } from 'lucide-react';
+import { Plus, Upload, Search, Trash2, Edit2, ShoppingCart, X, CheckCircle, Filter, ChevronDown, Download, RefreshCw, LayoutGrid, List, DollarSign } from 'lucide-react';
 import DiamondForm from '../components/DiamondForm';
 import CSVUpload from '../components/CSVUpload';
 import SalesModal from '../components/SalesModal';
@@ -26,103 +26,6 @@ const getFluorescenceShortCode = (fluorescence) => {
 
 import authService from '../services/auth.service';
 
-const SummaryCards = ({ diamonds }) => (
-    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-sm mb-4">
-        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-slate-400 text-xs font-bold uppercase">Total Stones</span>
-            <span className="text-slate-800 font-bold text-lg">{diamonds.length}</span>
-        </div>
-        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-slate-400 text-xs font-bold uppercase">Total Carats</span>
-            <span className="text-blue-600 font-bold text-lg">
-                {diamonds.reduce((sum, d) => sum + parseFloat(d.carat || 0), 0).toFixed(2)}
-            </span>
-        </div>
-        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-slate-400 text-xs font-bold uppercase">Total Expense (Cost)</span>
-            <span className="text-indigo-600 font-bold text-lg">
-                ${diamonds.reduce((sum, d) => {
-                    const cost = d.price ? (parseFloat(d.price) * (1 - (parseFloat(d.discount) || 0) / 100)) : 0;
-                    return sum + cost;
-                }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-        </div>
-        <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col items-center justify-center">
-            <span className="text-slate-400 text-xs font-bold uppercase">Total Profit (Realized)</span>
-            <span className="text-emerald-600 font-bold text-lg">
-                ${diamonds.reduce((sum, d) => {
-                    const cost = d.price ? (parseFloat(d.price) * (1 - (parseFloat(d.discount) || 0) / 100)) : 0;
-                    const sale = parseFloat(d.sale_price) || 0;
-                    const profit = sale > 0 ? (sale - cost) : 0;
-                    return sum + profit;
-                }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-        </div>
-    </div>
-);
-
-const FinancialBreakdown = () => {
-    const [summary, setSummary] = useState(null);
-    const [loading, setLoading] = useState(false);
-
-    useEffect(() => {
-        const loadSummary = async () => {
-            setLoading(true);
-            try {
-                const res = await diamondService.getSummary();
-                setSummary(res.data);
-            } catch (err) {
-                console.error("Summary load failed", err);
-            }
-            setLoading(false);
-        };
-        loadSummary();
-    }, []);
-
-    if (loading) return <div className="p-4 text-center text-slate-400 text-xs">Loading Financial Data...</div>;
-    if (!summary) return null;
-
-    return (
-        <table className="w-full text-left border-collapse text-xs">
-            <thead className="bg-slate-100 text-slate-500 font-bold uppercase tracking-wider">
-                <tr>
-                    <th className="px-4 py-3 border-b border-slate-200">Staff / Admin</th>
-                    <th className="px-4 py-3 border-b border-slate-200 text-right">Role</th>
-                    <th className="px-4 py-3 border-b border-slate-200 text-right">Total Diamonds</th>
-                    <th className="px-4 py-3 border-b border-slate-200 text-right">Total Expense</th>
-                    <th className="px-4 py-3 border-b border-slate-200 text-right text-emerald-600">Total Profit</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-                {summary.breakdown.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-50/50">
-                        <td className="px-4 py-2 font-medium text-slate-700">{row.staff_name || 'Unknown'}</td>
-                        <td className="px-4 py-2 text-right text-slate-500 capitalize">{row.role}</td>
-                        <td className="px-4 py-2 text-right font-bold">{row.total_count}</td>
-                        <td className="px-4 py-2 text-right text-indigo-600 font-mono">
-                            ${parseFloat(row.total_expense).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-2 text-right text-emerald-600 font-bold font-mono">
-                            ${parseFloat(row.total_profit).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </td>
-                    </tr>
-                ))}
-                {/* Grand Total Row */}
-                <tr className="bg-slate-50 font-bold border-t border-slate-200">
-                    <td className="px-4 py-3 text-slate-800">TOTAL</td>
-                    <td className="px-4 py-3"></td>
-                    <td className="px-4 py-3 text-right">{summary.grandTotal.total_count}</td>
-                    <td className="px-4 py-3 text-right text-indigo-700 font-mono">
-                        ${summary.grandTotal.total_expense.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-right text-emerald-700 font-mono">
-                        ${summary.grandTotal.total_profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    );
-};
 
 const Inventory = () => {
     const [diamonds, setDiamonds] = useState([]);
@@ -148,7 +51,7 @@ const Inventory = () => {
 
     // Filters
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('in_stock');
     const [shapeFilter, setShapeFilter] = useState('');
     const [clarityFilter, setClarityFilter] = useState('');
     const [colorFilter, setColorFilter] = useState('');
@@ -234,7 +137,43 @@ const Inventory = () => {
 
     const handleSelectAll = (e) => setSelectedIds(e.target.checked ? diamonds.map(d => d.id) : []);
     const handleSelect = (id) => setSelectedIds(prev => prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]);
-    const handleSuccess = () => { setShowAddModal(false); setSelectedDiamond(null); setShowUploadModal(false); fetchDiamonds(); };
+
+    const handleSuccess = async (newDiamondId, mode) => {
+        setShowAddModal(false);
+        setSelectedDiamond(null);
+        setShowUploadModal(false);
+
+        // Refresh list
+        await fetchDiamonds();
+
+        if (mode === 'ORDER' && newDiamondId) {
+            // Immediate Sales Trigger: Ensure the new diamond is in the state (might be filtered out)
+            try {
+                const res = await diamondService.get(newDiamondId);
+                const newDiamond = res.data;
+
+                if (newDiamond) {
+                    // Update state ensuring we don't duplicate if already fetched
+                    setDiamonds(prev => {
+                        const exists = prev.find(d => d.id === newDiamond.id);
+                        if (exists) return prev;
+                        return [newDiamond, ...prev];
+                    });
+
+                    // Wait for next tick to ensure state update propagates? 
+                    // React batches, so typically safe. But selection depends on it.
+                    // Actually, setSelectedIds depends on `diamonds`? 
+                    // No, `handleSelectAll` uses `diamonds`, but `SalesModal` filters `diamonds`.
+
+                    setSelectedIds([newDiamondId]);
+                    setShowSalesModal(true);
+                }
+            } catch (err) {
+                console.error("Failed to fetch new diamond for order:", err);
+                alert("Order created but failed to load for immediate sale. Please find it in inventory.");
+            }
+        }
+    };
 
     const isAllSelected = diamonds.length > 0 && selectedIds.length === diamonds.length;
 
@@ -339,6 +278,22 @@ const Inventory = () => {
                 {/* Row 2: Search & Filters Toolbar */}
                 <div className="px-6 pb-6 pt-2 flex flex-wrap items-center justify-between gap-4">
 
+                    {/* Stock/Sold Toggle */}
+                    <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
+                        <button
+                            onClick={() => setStatusFilter('in_stock')}
+                            className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${statusFilter === 'in_stock' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            In Stock
+                        </button>
+                        <button
+                            onClick={() => setStatusFilter('sold')}
+                            className={`px-6 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all ${statusFilter === 'sold' ? 'bg-white text-rose-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Sold Out
+                        </button>
+                    </div>
+
                     {/* Search Bar */}
                     <div className="relative group w-full sm:w-72">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -425,9 +380,11 @@ const Inventory = () => {
                     <span className="font-semibold text-slate-800 ">{selectedIds.length}</span> selected
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => setShowSalesModal(true)} className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-teal-700 transform hover:-translate-y-0.5 transition-all">
-                        <DollarSign className="w-4 h-4" /> Sell Selected
-                    </button>
+                    {statusFilter !== 'sold' && (
+                        <button onClick={() => setShowSalesModal(true)} className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-emerald-200 hover:from-emerald-600 hover:to-teal-700 transform hover:-translate-y-0.5 transition-all">
+                            <DollarSign className="w-4 h-4" /> Sell Selected
+                        </button>
+                    )}
                     <button onClick={handleExportSelected} className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-violet-500 to-purple-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-violet-200  hover:from-violet-600 hover:to-purple-700 transform hover:-translate-y-0.5 transition-all">
                         <Download className="w-4 h-4" /> Export
                     </button>
@@ -556,29 +513,6 @@ const Inventory = () => {
                 </table>
             </div >
 
-            {/* --- FINANCIAL SUMMARY & TOTALS --- */}
-            {
-                isAdmin && (
-                    <div className="bg-slate-50 border-t border-slate-200 p-6 z-30">
-                        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4 border-b border-slate-200 pb-2">Financial Overview</h3>
-
-                        {/* Grand Totals Cards */}
-                        <SummaryCards diamonds={diamonds} />
-
-                        {/* Detailed Breakdown */}
-                        <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 shadow-sm bg-white">
-                            <FinancialBreakdown />
-                        </div>
-                    </div>
-                )
-            }
-            {
-                !isAdmin && (
-                    <div className="bg-slate-50 border-t border-slate-200 p-4 z-30">
-                        <SummaryCards diamonds={diamonds} />
-                    </div>
-                )
-            }
 
 
 

@@ -610,7 +610,8 @@ exports.bulkSell = async (req, res) => {
                 diamondId: d.id,
                 quantity: 1,
                 price: parseFloat(d.price) || 0, // Cost basis
-                salePrice: 0 // Part of bulk package
+                sale_price: 0, // Part of bulk package
+                profit: 0 - (parseFloat(d.price) || 0) // Technically negative profit per item if sale_price is 0, but total invoice handle profit.
             });
         }
 
@@ -994,6 +995,21 @@ exports.getBuyers = async (req, res) => {
     }
 };
 
+exports.getLocations = async (req, res) => {
+    try {
+        const locations = await Diamond.findAll({
+            attributes: [[db.Sequelize.fn('DISTINCT', db.Sequelize.col('buyer_country')), 'location']],
+            where: {
+                buyer_country: { [db.Sequelize.Op.ne]: null, [db.Sequelize.Op.ne]: '' }
+            },
+            order: [['buyer_country', 'ASC']]
+        });
+        res.send(locations.map(d => d.get('location')).filter(l => l));
+    } catch (err) {
+        res.status(500).send({ message: err.message || "Error retrieving locations." });
+    }
+};
+
 // Fetch Unique Companies
 exports.getCompanies = async (req, res) => {
     try {
@@ -1224,56 +1240,121 @@ exports.fetchExternal = async (req, res) => {
 // Inventory Financial Summary
 exports.getSummary = async (req, res) => {
     try {
-        console.log(`Summary Request | User: ${req.userId} | Role: ${req.userRole}`);
+        console.log(`Summary Request | User: ${req.userId} | Role: ${req.userRole} | Query:`, req.query);
 
-        let whereClause = "d.status IN ('in_stock', 'sold', 'in_cart')";
         const replacements = {};
+        // Base logic: Only active items (or sold)
+        let inventoryWhere = "d.status IN ('in_stock', 'sold', 'in_cart')";
+        // Sales logic: Based on INVOICES now for Realized Profit
+        let salesWhere = "i.payment_status != 'Cancelled'";
 
-        // RBAC: If not admin, restrict to their own data
-        if (req.userRole !== 'admin') {
-            if (!req.userId) {
-                console.warn("Security Warning: Staff request without User ID. Returning empty summary.");
-                return res.send({
-                    breakdown: [],
-                    grandTotal: { total_count: 0, total_expense: 0, total_profit: 0 }
-                });
+        // Filter: Remove "Unknown" (NULL staff)
+        inventoryWhere += " AND d.created_by IS NOT NULL";
+
+        // RBAC & Filtering
+        if (req.userRole === 'admin') {
+            // Admin can filter by specific staff
+            if (req.query.staffId && req.query.staffId !== 'ALL') {
+                inventoryWhere += " AND d.created_by = :targetStaff";
+                salesWhere += " AND i.created_by = :targetStaff";
+                replacements.targetStaff = req.query.staffId;
             }
-            whereClause += " AND d.created_by = :userId";
+        } else {
+            // Non-admin sees ONLY their own data
+            if (!req.userId) return res.send({ breakdown: [], grandTotal: {} });
+
+            inventoryWhere += " AND d.created_by = :userId";
+            salesWhere += " AND i.created_by = :userId";
             replacements.userId = req.userId;
         }
 
-        const query = `
+        // 1. Inventory Stats (Group by Creator) -> Remains same (Cost Price of Stock)
+        const inventoryQuery = `
             SELECT 
-                d.created_by,
+                d.created_by as staff_id,
                 a.name as staff_name,
                 a.role,
                 COUNT(d.id) as total_count,
-                SUM(d.price * (1 - COALESCE(d.discount, 0) / 100)) as total_expense,
-                SUM(
-                    CASE 
-                        WHEN d.sale_price > 0 THEN d.sale_price - (d.price * (1 - COALESCE(d.discount, 0) / 100)) 
-                        ELSE 0 
-                    END
-                ) as total_profit
+                SUM(d.price * (1 - COALESCE(d.discount, 0) / 100)) as total_expense
             FROM diamonds d
             LEFT JOIN admins a ON d.created_by = a.id
-            WHERE ${whereClause}
+            WHERE ${inventoryWhere}
             GROUP BY d.created_by
         `;
 
-        const [results, metadata] = await db.sequelize.query(query, {
-            replacements: replacements
+        // 2. Sales Stats (Group by Invoice Creator) -> CHANGED to Realized Profit from Invoices
+        // Realized Profit = (Invoice Total Profit * (Paid Amount / Total Amount))
+        // If Total Amount is 0, Profit is 0.
+        // We use sql IF to handle division by zero.
+        const salesQuery = `
+            SELECT 
+                i.created_by as staff_id,
+                a.name as staff_name,
+                a.role,
+                SUM(
+                    CASE 
+                        WHEN i.total_amount > 0 THEN (i.total_profit * (i.paid_amount / i.total_amount))
+                        ELSE 0 
+                    END
+                ) as total_profit
+            FROM invoices i
+            LEFT JOIN admins a ON i.created_by = a.id
+            WHERE ${salesWhere}
+            GROUP BY i.created_by
+        `;
+
+        const [invResults] = await db.sequelize.query(inventoryQuery, { replacements });
+        const [salesResults] = await db.sequelize.query(salesQuery, { replacements });
+
+        // 3. Merge Strategies
+        const staffMap = {};
+
+        // Process Inventory
+        invResults.forEach(row => {
+            const id = row.staff_id; // already filtered nulls
+            if (!staffMap[id]) {
+                staffMap[id] = {
+                    staff_name: row.staff_name || 'Unknown',
+                    role: row.role || 'N/A',
+                    total_count: 0,
+                    total_expense: 0,
+                    total_profit: 0
+                };
+            }
+            staffMap[id].total_count = parseInt(row.total_count) || 0;
+            staffMap[id].total_expense = parseFloat(row.total_expense) || 0;
+            if (row.staff_name) staffMap[id].staff_name = row.staff_name;
         });
 
+        // Process Sales
+        salesResults.forEach(row => {
+            const id = row.staff_id;
+            if (!staffMap[id]) {
+                staffMap[id] = {
+                    staff_name: row.staff_name || 'Unknown',
+                    role: row.role || 'N/A',
+                    total_count: 0,
+                    total_expense: 0,
+                    total_profit: 0
+                };
+            }
+            // Add Sales Profit (Realized)
+            // Note: If staff has sales but no inventory, they appear here.
+            staffMap[id].total_profit = parseFloat(row.total_profit) || 0;
+            if (row.staff_name && staffMap[id].staff_name === 'Unknown') staffMap[id].staff_name = row.staff_name;
+        });
+
+        const breakdown = Object.values(staffMap);
+
         // Calculate Grand Totals
-        const grandTotal = results.reduce((acc, curr) => ({
-            total_count: acc.total_count + (parseInt(curr.total_count) || 0),
-            total_expense: acc.total_expense + (parseFloat(curr.total_expense) || 0),
-            total_profit: acc.total_profit + (parseFloat(curr.total_profit) || 0)
+        const grandTotal = breakdown.reduce((acc, curr) => ({
+            total_count: acc.total_count + curr.total_count,
+            total_expense: acc.total_expense + curr.total_expense,
+            total_profit: acc.total_profit + curr.total_profit
         }), { total_count: 0, total_expense: 0, total_profit: 0 });
 
         res.send({
-            breakdown: results,
+            breakdown: breakdown,
             grandTotal: grandTotal
         });
 

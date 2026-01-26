@@ -28,6 +28,14 @@ const exportBulk = (filters) => {
     return api.post(`/invoices/export-excel`, filters, { responseType: 'blob' });
 };
 
+const updateStatus = (id, data) => {
+    return api.put(`/invoices/${id}/status`, data);
+};
+
+const addPayment = (id, data) => {
+    return api.post(`/invoices/${id}/payment`, data);
+};
+
 const InvoiceService = {
     create,
     getAll,
@@ -35,7 +43,10 @@ const InvoiceService = {
     delete: remove,
     deleteAll,
     exportExcel,
-    exportBulk
+    exportBulk,
+    exportBulk,
+    updateStatus,
+    addPayment
 };
 
 export default InvoiceService;

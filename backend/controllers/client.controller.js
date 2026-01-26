@@ -42,7 +42,13 @@ exports.create = (req, res) => {
 // Retrieve all Clients from the database.
 exports.findAll = (req, res) => {
     const name = req.query.name;
-    var condition = name ? { name: { [Op.like]: `%${name}%` } } : null;
+    var condition = name ? { name: { [Op.like]: `%${name}%` } } : {};
+
+    // RBAC: Strict Privacy
+    // Admin sees all. Staff sees ONLY their own clients.
+    if (req.userRole !== 'admin') {
+        condition.created_by = req.userId;
+    }
 
     Client.findAll({ where: condition, order: [['createdAt', 'DESC']] })
         .then(data => {

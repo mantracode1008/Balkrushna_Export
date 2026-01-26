@@ -68,22 +68,42 @@ exports.create = async (req, res) => {
                 profit: totalItemProfit
             });
 
-            // Update Diamond Quantity and Status
+            // Update Diamond Quantity, Status AND Financials for Admin Visibility
             const newQuantity = (diamond.quantity || 1) - quantity;
             const newStatus = newQuantity <= 0 ? 'sold' : 'in_stock';
 
             await diamond.update({
                 quantity: newQuantity,
-                status: newStatus
+                status: newStatus,
+                // SYNC SALE DATA TO MASTER DIAMOND RECORD
+                sale_price: salePrice, // Crucial for Admin visibility
+                buyer_name: customerName,
+                sale_date: new Date(),
+                sold_by: req.userId // Track who sold it
             }, { transaction: t });
         }
+
+        // Calculate Due Date
+        const dueDays = parseInt(req.body.due_days) || 0;
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + dueDays);
 
         const invoice = await Invoice.create({
             customer_name: customerName,
             total_amount: totalAmount,
             total_profit: totalProfit,
             invoice_date: new Date(),
-            created_by: req.userId // Save the user who created this invoice
+            created_by: req.userId,
+            payment_status: 'Pending',
+            remarks: req.body.remarks || '',
+
+            // Payment Fields
+            payment_terms: req.body.payment_terms || 'Custom',
+            due_days: dueDays,
+            due_date: dueDate,
+            paid_amount: 0,
+            balance_due: totalAmount,
+            payment_history: []
         }, { transaction: t });
 
         for (const itemData of invoiceItemsData) {
@@ -103,17 +123,32 @@ exports.create = async (req, res) => {
 
 exports.findAll = (req, res) => {
     const whereCondition = {};
-    if (req.userRole === 'staff') {
+
+    // RBAC & Filtering
+    if (req.userRole === 'admin') {
+        // Admin: Optional Filter by Staff
+        if (req.query.staffId) {
+            whereCondition.created_by = req.query.staffId;
+        }
+    } else {
+        // Staff: Strict restriction to own invoices
         whereCondition.created_by = req.userId;
     }
 
     Invoice.findAll({
         where: whereCondition,
-        include: [{
-            model: InvoiceItem,
-            as: "items",
-            include: [{ model: Diamond, as: "diamond" }]
-        }],
+        include: [
+            {
+                model: InvoiceItem,
+                as: "items",
+                include: [{ model: Diamond, as: "diamond" }]
+            },
+            {
+                model: db.admins,
+                as: "creator",
+                attributes: ['name', 'role']
+            }
+        ],
         order: [['createdAt', 'DESC']]
     })
         .then(data => {
@@ -364,5 +399,87 @@ exports.exportExcel = async (req, res) => {
     } catch (err) {
         console.error("Export Error:", err);
         res.status(500).send({ message: "Export failed: " + err.message });
+    }
+};
+
+// Update Invoice Status
+exports.updateStatus = async (req, res) => {
+    const id = req.params.id;
+    const { payment_status, remarks } = req.body;
+
+    try {
+        const updateData = {};
+        if (payment_status) updateData.payment_status = payment_status;
+        if (remarks !== undefined) updateData.remarks = remarks;
+
+        const [num] = await Invoice.update(updateData, { where: { id: id } });
+
+        if (num == 1) {
+            res.send({ message: "Invoice status updated successfully." });
+        } else {
+            res.status(404).send({ message: `Cannot update Invoice with id=${id}. Maybe Invoice was not found!` });
+        }
+    } catch (err) {
+        res.status(500).send({ message: "Error updating Invoice with id=" + id });
+    }
+};
+
+// Add Payment
+exports.addPayment = async (req, res) => {
+    const id = req.params.id;
+    const { amount, date, mode, note } = req.body;
+
+    const t = await db.sequelize.transaction();
+
+    try {
+        const invoice = await Invoice.findByPk(id, { transaction: t });
+        if (!invoice) {
+            await t.rollback();
+            return res.status(404).send({ message: "Invoice not found." });
+        }
+
+        const paymentAmount = parseFloat(amount) || 0;
+        const newPaidAmount = parseFloat(invoice.paid_amount || 0) + paymentAmount;
+        const totalAmount = parseFloat(invoice.total_amount);
+
+        let newBalance = totalAmount - newPaidAmount;
+        // Float precision safety
+        if (newBalance < 0.01 && newBalance > -0.01) newBalance = 0;
+
+        let newStatus = invoice.payment_status;
+        if (newBalance <= 0) {
+            newStatus = 'Paid';
+            newBalance = 0; // Ensure no negative -0.00
+        } else if (newBalance < totalAmount) {
+            newStatus = 'Partial';
+        }
+
+        // Update History
+        let history = invoice.payment_history || [];
+        // Helper if history is string (legacy safety)
+        if (typeof history === 'string') {
+            try { history = JSON.parse(history); } catch (e) { history = []; }
+        }
+
+        history.push({
+            date: date || new Date(),
+            amount: paymentAmount,
+            mode: mode || 'Cash',
+            note: note || ''
+        });
+
+        await invoice.update({
+            paid_amount: newPaidAmount,
+            balance_due: newBalance,
+            payment_status: newStatus,
+            payment_history: history
+        }, { transaction: t });
+
+        await t.commit();
+        res.send({ message: "Payment recorded successfully.", newStatus, newBalance, history });
+
+    } catch (err) {
+        await t.rollback();
+        res.status(500).send({ message: "Error recording payment: " + err.message });
     }
 };

@@ -1,76 +1,95 @@
 import React, { useState, useEffect } from 'react';
 import diamondService from '../services/diamond.service';
-import { X, Search, Gem, DollarSign, Globe, User, Calculator, FileText } from 'lucide-react';
+import {
+    X, Search, Gem, DollarSign, Globe, User, Calculator,
+    FileText, Check, ChevronDown, Plus, Info, TrendingUp,
+    ArrowRight, MapPin, Phone, Mail, Building2, Package
+} from 'lucide-react';
 import { SHAPE_MASTER, SHAPE_OPTIONS, getDisplayShape } from '../utils/shapeUtils';
 import ClientSelect from './ClientSelect';
 import CompanySelect from './CompanySelect';
+import LocationSelect from './LocationSelect';
 import ClientForm from './ClientForm';
 import invoiceService from '../services/invoice.service';
 import api from '../services/api';
 
-const InputField = ({ label, name, type = "text", required = false, width = "w-full", value, onChange, disabled = false, min, autoFocus = false, inputClassName = "", list, autoComplete, placeholder }) => (
-    <div className={`flex flex-col ${width}`}>
-        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1">{label} {required && <span className="text-red-500">*</span>}</label>
+// --- ATOMIC COMPONENTS ---
+
+const Card = ({ children, title, icon: Icon, className = "", headerAction }) => (
+    <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>
+        {(title || Icon) && (
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                <div className="flex items-center gap-3">
+                    {Icon && (
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                            <Icon size={18} strokeWidth={2.5} />
+                        </div>
+                    )}
+                    <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider">{title}</h3>
+                </div>
+                {headerAction}
+            </div>
+        )}
+        <div className="p-6">
+            {children}
+        </div>
+    </div>
+);
+
+const Label = ({ children, required }) => (
+    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">
+        {children} {required && <span className="text-rose-500">*</span>}
+    </label>
+);
+
+const Input = ({ label, required, className = "", ...props }) => (
+    <div className={`flex flex-col ${className}`}>
+        {label && <Label required={required}>{label}</Label>}
         <input
-            type={type}
-            name={name}
-            value={value || ''}
-            onChange={onChange}
-            step={type === 'number' ? "0.01" : undefined}
-            min={min}
-            className={`w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all disabled:opacity-60 disabled:cursor-not-allowed ${inputClassName}`}
-            required={required}
-            disabled={disabled}
-            autoFocus={autoFocus}
-            list={list}
-            autoComplete={autoComplete}
-            placeholder={placeholder}
+            {...props}
+            className="w-full px-4 py-2.5 text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 placeholder:font-medium disabled:opacity-60"
         />
     </div>
 );
 
-const SelectField = ({ label, name, options, value, onChange, required = false, width = "w-full" }) => (
-    <div className={`flex flex-col ${width}`}>
-        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1 flex items-center gap-1">{label} {required && <span className="text-red-500">*</span>}</label>
-        <select
-            name={name}
-            value={value || ''}
-            onChange={onChange}
-            className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all cursor-pointer hover:bg-slate-100"
-            required={required}
-        >
-            <option value="">Select...</option>
-            {options.map((opt, idx) => (
-                <option key={idx} value={opt}>{opt}</option>
-            ))}
-        </select>
-    </div>
-);
-
-const SectionHeader = ({ icon: Icon, title, color = "text-slate-800" }) => (
-    <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
-        <div className={`p-1.5 rounded-lg ${color.replace('text-', 'bg-').replace('800', '100')} ${color}`}>
-            <Icon size={14} strokeWidth={3} />
+const Select = ({ label, options, required, className = "", ...props }) => (
+    <div className={`flex flex-col ${className}`}>
+        {label && <Label required={required}>{label}</Label>}
+        <div className="relative">
+            <select
+                {...props}
+                className="w-full px-4 py-2.5 text-sm font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all appearance-none cursor-pointer"
+            >
+                <option value="">Select...</option>
+                {options.map((opt, idx) => (
+                    <option key={idx} value={typeof opt === 'object' ? opt.value : opt}>
+                        {typeof opt === 'object' ? opt.label : opt}
+                    </option>
+                ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
         </div>
-        <h3 className={`text-xs font-black uppercase tracking-widest ${color}`}>{title}</h3>
     </div>
 );
 
 const SuccessPopup = ({ message }) => (
-    <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/20 backdrop-blur-[2px] animate-in fade-in duration-300">
-        <div className="bg-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-2 shadow-inner">
-                <Gem className="w-8 h-8 text-emerald-600 animate-pulse" />
+    <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-300">
+        <div className="bg-white px-10 py-8 rounded-3xl shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 slide-in-from-bottom-6 duration-500">
+            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mb-2 shadow-inner">
+                <Check className="w-10 h-10 text-emerald-600" strokeWidth={3} />
             </div>
-            <h3 className="text-xl font-black text-slate-800 tracking-tight">{message}</h3>
-            <div className="h-1 w-24 bg-emerald-100 rounded-full overflow-hidden">
-                <div className="h-full bg-emerald-500 w-full animate-[progress_1s_ease-in-out_forwards]" />
+            <h3 className="text-2xl font-black text-slate-800 tracking-tight">{message}</h3>
+            <div className="h-1.5 w-32 bg-emerald-100 rounded-full overflow-hidden">
+                <div className="h-full bg-emerald-600 w-full animate-[progress_1.5s_ease-in-out_forwards]" />
             </div>
         </div>
     </div>
 );
 
+// --- MAIN COMPONENT ---
+
 const DiamondForm = ({ onClose, onSuccess, initialData }) => {
+    // --- STATE ---
     const [showSuccess, setShowSuccess] = useState(false);
     const [successMsg, setSuccessMsg] = useState('');
     const [formData, setFormData] = useState({
@@ -99,43 +118,28 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
         discount: '',
         status: 'in_stock',
         quantity: 1,
-        // Refactored Fields
         buyer_name: '',
         buyer_mobile: '',
-        // Removed buyer_country from client, moved to logistics with seller_country
         buyer_country: '',
         seller_country: '',
         sale_price: '',
         commission: '',
         company: '',
-        // Removed: diamond_type, growth_process, report_url
+        measurements: ''
     });
 
     const [loading, setLoading] = useState(false);
     const [fetchLoading, setFetchLoading] = useState(false);
     const [pricePerCarat, setPricePerCarat] = useState('');
     const [buyers, setBuyers] = useState([]);
-
-    // Advanced Sales Flow State
-    const [saleType, setSaleType] = useState('STOCK'); // 'STOCK' | 'ORDER'
-    const [clientData, setClientData] = useState({}); // For New Client in Order Mode
-
-    // Financials
+    const [saleType, setSaleType] = useState('STOCK');
+    const [clientData, setClientData] = useState({});
     const [currency, setCurrency] = useState('USD');
     const [exchangeRate, setExchangeRate] = useState('');
     const [commissionINR, setCommissionINR] = useState('');
     const [commissionUSD, setCommissionUSD] = useState('');
 
-    const [currencySymbol, setCurrencySymbol] = useState('$');
-
-    // Effect: Sync Currency Symbol
-    useEffect(() => {
-        setCurrencySymbol(currency === 'INR' ? '₹' : (currency === 'EUR' ? '€' : '$'));
-    }, [currency]);
-
-    // Effect: Commission Bidirectional Sync
-    // We use commissionUSD as source of truth for saving, but UI allows both.
-    // Logic moved to handlers to avoid loop.
+    // --- EFFECTS ---
 
     useEffect(() => {
         const fetchBuyers = async () => {
@@ -156,7 +160,7 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
             setFormData(prev => ({
                 ...prev,
                 buyer_mobile: matchedBuyer.buyer_mobile || prev.buyer_mobile,
-                seller_country: matchedBuyer.buyer_country || prev.seller_country // Auto-fill 'Buyer Location' (which maps to seller_country DB field)
+                seller_country: matchedBuyer.buyer_country || prev.seller_country
             }));
         }
     }, [formData.buyer_name, buyers]);
@@ -183,11 +187,9 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
         setFormData(prev => {
             const colorMap = { 'D': 1, 'E': 2, 'F': 3, 'G': 4, 'H': 5, 'I': 6, 'J': 7, 'K': 8, 'L': 9, 'M': 10 };
             const clarityMap = { 'IF': 'Q1', 'VVS1': 'Q2', 'VVS2': 'Q3', 'VS1': 'Q4', 'VS2': 'Q5', 'SI1': 'Q6', 'SI2': 'Q7', 'SI3': 'Q8', 'I1': 'Q9', 'I2': 'Q10', 'I3': 'Q11', 'I4': 'Q12', 'I5': 'Q13', 'I6': 'Q14', 'I7': 'Q15' };
-
             const colorCode = colorMap[String(prev.color || '').toUpperCase().trim()] || prev.color_code || '';
             const cVal = String(prev.clarity || '').toUpperCase().trim();
             const clarityCode = clarityMap[cVal] || clarityMap[cVal.replace(/\s+/g, '')] || prev.clarity_code || '';
-
             if (colorCode !== prev.color_code || clarityCode !== prev.clarity_code) {
                 return { ...prev, color_code: colorCode, clarity_code: clarityCode };
             }
@@ -217,6 +219,8 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
         }
     }, [formData.carat, formData.shape, formData.color_code, formData.clarity_code]);
 
+    // --- HANDLERS ---
+
     const handleChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -228,8 +232,7 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
         if (lower.startsWith('ex')) return 'Ex';
         if (lower.startsWith('vg') || lower.startsWith('very')) return 'Vg';
         if (lower.startsWith('gd') || lower.startsWith('good')) return 'Gd';
-        const matched = ['Ex', 'Vg', 'Gd'].find(opt => opt.toLowerCase() === lower);
-        return matched || null;
+        return ['Ex', 'Vg', 'Gd'].find(opt => opt.toLowerCase() === lower) || null;
     };
 
     const handleFetch = async () => {
@@ -240,15 +243,11 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
             if (response.data) {
                 const fetched = response.data;
                 Object.keys(fetched).forEach(key => {
-                    if (typeof fetched[key] === 'string') {
-                        fetched[key] = fetched[key].toUpperCase();
-                    }
+                    if (typeof fetched[key] === 'string') fetched[key] = fetched[key].toUpperCase();
                 });
-
                 const newCut = normalizeGrade(fetched.cut);
                 const newPolish = normalizeGrade(fetched.polish);
                 const newSym = normalizeGrade(fetched.symmetry);
-
                 setFormData(prev => ({
                     ...prev,
                     ...fetched,
@@ -259,10 +258,7 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
                     shape: fetched.shape || prev.shape,
                     S_code: fetched.S_code || prev.S_code,
                 }));
-
-                if (fetched.rap_price && Number(fetched.rap_price) > 0) {
-                    setPricePerCarat(fetched.rap_price);
-                }
+                if (fetched.rap_price && Number(fetched.rap_price) > 0) setPricePerCarat(fetched.rap_price);
             }
         } catch (error) {
             console.error("Fetch error:", error);
@@ -285,405 +281,268 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
                 }
             }
 
+            const payload = {
+                ...formData,
+                sale_type: saleType,
+                currency: currency,
+                exchange_rate: parseFloat(exchangeRate) || 1,
+                commission_usd: parseFloat(commissionUSD) || 0,
+                commission_inr: parseFloat(commissionINR) || 0,
+            };
+
             if (initialData && initialData.id) {
-                await diamondService.update(initialData.id, formData);
-                // Update Logic handled in service
+                await diamondService.update(initialData.id, payload);
             } else {
-                // Prepare Payload
-                const payload = {
-                    ...formData,
-                    sale_type: saleType,
-                    // Financials
-                    currency: currency,
-                    exchange_rate: parseFloat(exchangeRate) || 1,
-                    commission_usd: parseFloat(commissionUSD) || 0,
-                    commission_inr: parseFloat(commissionINR) || 0,
-                    // If Order Mode, include Client Data
-                    ...(saleType === 'ORDER' ? {
-                        client: clientData,
-                        status: 'sold' // Force sold
-                    } : {
-                        status: 'in_stock'
-                    })
-                };
-
-                // If Order Mode, Create Client first? Or handle in backend?
-                // Backend 'create' doesn't support nested client creation in one go easily unless we modify it heavily.
-                // Better approach: If Order Mode, create Client first, then Diamond.
-
+                // For New Diamonds
+                // If Order Mode, force status to 'in_stock' initially (will sell in next step)
                 if (saleType === 'ORDER') {
-                    // 1. Create Client
-                    try {
-                        const clientRes = await api.post('/clients', clientData);
-                        payload.client_id = clientRes.data.id;
-                        payload.buyer_name = clientData.name;
-                        payload.buyer_country = clientData.country;
-                        payload.buyer_mobile = clientData.contact_number;
-                    } catch (cErr) {
-                        alert("Failed to create Client. Please check details.");
-                        setLoading(false);
-                        return;
-                    }
+                    payload.status = 'in_stock';
+                    payload.commission = 0;
                 }
 
                 const newDiamond = await diamondService.create(payload);
 
-                // Invoice Logic for Order Mode
                 if (saleType === 'ORDER' && newDiamond.data && newDiamond.data.id) {
-                    try {
-                        const totalUSD = parseFloat(payload.price) || 0; // Cost? Or Sale Price?
-                        // Actually in Order Mode, we should have a Final Sale Price.
-                        // Let's assume 'price' field in form is COST, and we need a SALE PRICE field.
-                        // formData.sale_price should be used.
-
-                        await invoiceService.create({
-                            customerName: clientData.name,
-                            client_id: payload.client_id,
-                            customer_name: clientData.name,
-                            items: [{
-                                diamondId: newDiamond.data.id,
-                                quantity: 1,
-                                salePrice: parseFloat(formData.sale_price) || 0
-                            }],
-                            currency: currency,
-                            exchange_rate: payload.exchange_rate,
-                            commission_total_usd: payload.commission_usd,
-                            commission_total_inr: payload.commission_inr,
-                            final_amount_usd: parseFloat(formData.sale_price) || 0,
-                            // ... other fields
-                        });
-                    } catch (invErr) {
-                        console.error("Auto-Invoice Failed:", invErr);
-                    }
+                    setSuccessMsg('Asset Created! Opening Sales...');
+                    setShowSuccess(true);
+                    setTimeout(() => {
+                        if (onSuccess) onSuccess(newDiamond.data.id, 'ORDER');
+                        if (onClose) onClose();
+                    }, 1000);
+                    return;
                 }
             }
 
-            // Determine Success Message & Action
             const isSold = formData.status === 'sold';
-            const msg = isSold ? 'Diamond Sold Successfully!' : 'Diamond Saved Successfully!';
-
-            setSuccessMsg(msg);
+            setSuccessMsg(isSold ? 'Diamond Sold Successfully!' : 'Asset Saved Successfully!');
             setShowSuccess(true);
-
             setTimeout(() => {
-                if (isSold) {
-                    // Optional: If you want to force redirect, or just close.
-                    // User flow previously asked confirmation. Now we just do it?
-                    // Let's assume we redirect if sold, or just close if that's preferred.
-                    // Previous code: confirm -> redirect.
-                    // New code: Just redirect after popup.
-                    window.location.href = '/invoices';
-                } else {
-                    if (onSuccess) onSuccess();
-                    if (onClose) onClose();
-                }
+                if (isSold) window.location.href = '/invoices';
+                else { if (onSuccess) onSuccess(); if (onClose) onClose(); }
             }, 1000);
-
         } catch (error) {
-            console.error("Submit error:", error);
+            console.error("Save Error:", error);
             alert(error.response?.data?.message || "Failed to save diamond.");
-        } finally {
-            setLoading(false);
-        }
+        } finally { setLoading(false); }
     };
 
+    // --- RENDER ---
+
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
             {showSuccess && <SuccessPopup message={successMsg} />}
-            <div className="bg-white rounded-3xl w-full max-w-5xl shadow-2xl max-h-[95vh] overflow-hidden flex flex-col border border-slate-200">
-                {/* 1. Modern Header */}
-                <div className="flex justify-between items-center px-8 py-5 border-b border-slate-100 bg-white z-10 sticky top-0">
-                    <div>
-                        <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-                            {initialData ? 'Edit Inventory' : 'Add Inventory'}
-                        </h2>
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Diamond Details Entry</p>
+
+            <div className="bg-slate-50 rounded-[28px] w-full max-w-7xl shadow-2xl max-h-[92vh] overflow-hidden flex flex-col border border-white/20">
+
+                {/* --- HEADER --- */}
+                <header className="px-8 py-6 bg-white border-b border-slate-100 flex justify-between items-center z-20 shadow-sm relative">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
+                            <Plus size={24} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-slate-800 tracking-tight leading-none">
+                                {initialData ? 'Edit Asset' : 'New Diamond Asset'}
+                            </h2>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">
+                                Professional Export Management System
+                            </p>
+                        </div>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors group">
-                        <X className="w-6 h-6 text-slate-400 group-hover:text-red-500 transition-colors" />
+                    <button
+                        onClick={onClose}
+                        className="w-10 h-10 flex items-center justify-center hover:bg-slate-100 rounded-full transition-all text-slate-400 hover:text-rose-500 hover:rotate-90"
+                    >
+                        <X size={24} />
                     </button>
-                </div>
+                </header>
 
-                <div className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
-                    <div className="grid grid-cols-12 gap-8">
+                <div className="flex-1 overflow-y-auto px-8 py-10">
+                    <div className="grid grid-cols-12 gap-10">
 
-                        {/* LEFT COLUMN: Identification & Grading */}
-                        <div className="col-span-12 lg:col-span-7 space-y-6">
+                        {/* --- LEFT COLUMN (65%) --- */}
+                        <div className="col-span-12 lg:col-span-8 space-y-8">
 
-                            {/* Panel: Identification */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
-                                <SectionHeader icon={Gem} title="Identification & Certificate" color="text-indigo-600" />
-
-                                <div className="space-y-4">
-                                    <div className="flex gap-2">
-                                        <div className="flex-1">
-                                            <input
-                                                type="text"
-                                                name="certificate"
-                                                value={formData.certificate}
-                                                onChange={handleChange}
-                                                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleFetch(); } }}
-                                                required
-                                                autoFocus
-                                                placeholder="Certificate No."
-                                                className="w-full px-4 py-3 text-lg font-bold text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-slate-400 placeholder:font-medium"
-                                            />
+                            {/* Section 1: Identification & Certificate */}
+                            <Card title="Identification & Certificate" icon={Gem}>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="md:col-span-2">
+                                        <Label required>Certificate Number</Label>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1 group">
+                                                <input
+                                                    type="text"
+                                                    name="certificate"
+                                                    value={formData.certificate}
+                                                    onChange={handleChange}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleFetch(); } }}
+                                                    required
+                                                    autoFocus
+                                                    placeholder="Enter GIA / IGI #..."
+                                                    className="w-full pl-12 pr-4 py-3.5 text-lg font-black text-slate-800 bg-slate-50 border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:bg-white outline-none transition-all group-focus-within:shadow-xl group-focus-within:shadow-indigo-500/10"
+                                                />
+                                                <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={20} />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleFetch}
+                                                disabled={fetchLoading}
+                                                className="px-8 bg-indigo-600 hover:bg-indigo-700 text-white font-black rounded-2xl shadow-lg shadow-indigo-100 transition-all flex items-center gap-3 disabled:opacity-50 active:scale-95"
+                                            >
+                                                {fetchLoading ? <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin" /> : <Search size={20} strokeWidth={3} />}
+                                                <span>FETCH</span>
+                                            </button>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={handleFetch}
-                                            disabled={fetchLoading}
-                                            className="px-6 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
-                                        >
-                                            {fetchLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search className="w-5 h-5" />}
-                                            <span>Fetch</span>
-                                        </button>
                                     </div>
-
-                                    <div className="mb-4">
+                                    <div className="grid grid-cols-2 gap-6 md:col-span-2">
+                                        <LocationSelect label="Seller Origin" value={formData.buyer_country} onChange={handleChange} placeholder="e.g. India / UAE" />
                                         <CompanySelect value={formData.company} onChange={handleChange} />
                                     </div>
+                                    <Select label="Shape" name="shape" options={SHAPE_OPTIONS} value={getDisplayShape(formData.shape)} onChange={(e) => setFormData(prev => ({ ...prev, shape: e.target.value }))} required />
+                                    <Input label="Carat Weight" name="carat" value={formData.carat} onChange={handleChange} type="number" required placeholder="0.00" />
+                                </div>
+                            </Card>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <SelectField label="Shape" name="shape" options={SHAPE_OPTIONS} value={getDisplayShape(formData.shape)} onChange={(e) => setFormData(prev => ({ ...prev, shape: e.target.value }))} />
-                                        <InputField label="Carat Weight" name="carat" value={formData.carat} onChange={handleChange} type="number" required />
+                            {/* Section 2: Grading Report (4Cs) */}
+                            <Card title="Grading Report (4Cs)" icon={FileText}>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                    <Input label="Color" name="color" value={formData.color} onChange={handleChange} placeholder="D-Z" className="text-center" />
+                                    <Input label="Clarity" name="clarity" value={formData.clarity} onChange={handleChange} placeholder="VVS1..." className="text-center" />
+                                    <Select label="Cut" name="cut" options={['Ex', 'Vg', 'Gd', 'Fr']} value={formData.cut} onChange={handleChange} />
+                                    <Select label="Polish" name="polish" options={['Ex', 'Vg', 'Gd', 'Fr']} value={formData.polish} onChange={handleChange} />
+                                    <Select label="Symmetry" name="symmetry" options={['Ex', 'Vg', 'Gd', 'Fr']} value={formData.symmetry} onChange={handleChange} />
+                                    <Select label="Fluor" name="fluorescence" options={['N', 'F', 'M', 'S', 'VS']} value={formData.fluorescence} onChange={handleChange} />
+                                </div>
+                            </Card>
+
+                            {/* Section 3: Measurements & Ratios */}
+                            <Card title="Measurements & Ratios" icon={Calculator}>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div className="md:col-span-2">
+                                        <Input label="Dimensions" name="measurements" value={formData.measurements} onChange={handleChange} placeholder="6.50 x 6.52 x 4.00 mm" />
+                                    </div>
+                                    <Input label="Table %" name="table_percent" value={formData.table_percent} onChange={handleChange} placeholder="57" />
+                                    <Input label="Depth %" name="total_depth_percent" value={formData.total_depth_percent} onChange={handleChange} placeholder="62.5" />
+
+                                    <Input label="Cr Ht" name="crown_height" value={formData.crown_height} onChange={handleChange} placeholder="15.0" />
+                                    <Input label="Pv Dp" name="pavilion_depth" value={formData.pavilion_depth} onChange={handleChange} placeholder="43.5" />
+                                    <Input label="Girdle" name="girdle_thickness" value={formData.girdle_thickness} onChange={handleChange} placeholder="Med-Thk" />
+                                    <Input label="Culet" name="culet" value={formData.culet} onChange={handleChange} placeholder="None" />
+
+                                    <div className="md:col-span-4">
+                                        <Input label="Inscription / Comments" name="inscription" value={formData.inscription} onChange={handleChange} placeholder="GIA 12345678, Minor graining..." />
                                     </div>
                                 </div>
-                            </div>
-
-                            {/* Panel: Grading (4Cs) */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
-                                <SectionHeader icon={FileText} title="Grading Report (4Cs)" color="text-blue-600" />
-                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                                    <InputField label="Color" name="color" value={formData.color} onChange={handleChange} inputClassName="text-center" />
-                                    <InputField label="Clarity" name="clarity" value={formData.clarity} onChange={handleChange} inputClassName="text-center" />
-                                    <SelectField label="Cut" name="cut" options={['Ex', 'Vg', 'Gd']} value={formData.cut} onChange={handleChange} />
-                                    <SelectField label="Polish" name="polish" options={['Ex', 'Vg', 'Gd']} value={formData.polish} onChange={handleChange} />
-                                    <SelectField label="Sym" name="symmetry" options={['Ex', 'Vg', 'Gd']} value={formData.symmetry} onChange={handleChange} />
-                                    <SelectField label="Fluor" name="fluorescence" options={['N', 'F', 'M', 'S', 'VS']} value={formData.fluorescence} onChange={handleChange} />
-                                </div>
-                            </div>
-
-                            {/* Panel: Proportions */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
-                                <SectionHeader icon={Calculator} title="Measurements & Ratios" color="text-slate-600" />
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    <div className="col-span-2"><InputField label="Measurements" name="measurements" value={formData.measurements} onChange={handleChange} placeholder="e.g. 6.50 x 6.52 x 4.00" /></div>
-                                    <InputField label="Table %" name="table_percent" value={formData.table_percent} onChange={handleChange} />
-                                    <InputField label="Depth %" name="total_depth_percent" value={formData.total_depth_percent} onChange={handleChange} />
-                                    <InputField label="Cr Ht" name="crown_height" value={formData.crown_height} onChange={handleChange} />
-                                    <InputField label="Pav Dp" name="pavilion_depth" value={formData.pavilion_depth} onChange={handleChange} />
-                                    <InputField label="Girdle" name="girdle_thickness" value={formData.girdle_thickness} onChange={handleChange} />
-                                    <InputField label="Culet" name="culet" value={formData.culet} onChange={handleChange} />
-                                </div>
-                                <div className="mt-4">
-                                    <InputField label="Inscription / Comments" name="inscription" value={formData.inscription} onChange={handleChange} placeholder="Laser Inscription" />
-                                </div>
-                            </div>
-
+                            </Card>
                         </div>
 
-                        {/* RIGHT COLUMN: Economics, Logistics, Sales */}
-                        <div className="col-span-12 lg:col-span-5 space-y-6">
+                        {/* --- RIGHT COLUMN (35%) --- */}
+                        <div className="col-span-12 lg:col-span-4 space-y-8">
 
-                            {/* Panel: Economics */}
-                            <div className="bg-slate-900 p-6 rounded-2xl shadow-xl border border-slate-800 text-white relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 p-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-                                <SectionHeader icon={DollarSign} title="Pricing & Economics" color="text-blue-400" />
-
-                                <div className="space-y-4 relative z-10">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 block">Rap / Base ($)</label>
-                                            <input
-                                                type="number" step="0.01" value={pricePerCarat} onChange={(e) => setPricePerCarat(e.target.value)}
-                                                className="w-full px-3 py-2 text-sm font-bold bg-slate-800 border-slate-700 text-white rounded-lg focus:ring-1 focus:ring-blue-500 border outline-none" placeholder="Per Ct"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 block">Disc %</label>
-                                            <input
-                                                type="number" step="0.01" name="discount" value={formData.discount} onChange={handleChange}
-                                                className="w-full px-3 py-2 text-sm font-bold bg-slate-800 border-slate-700 text-white rounded-lg focus:ring-1 focus:ring-blue-500 border outline-none" placeholder="0"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="pt-2 border-t border-slate-800 mt-2">
-                                        <label className="text-xs font-bold text-emerald-400 uppercase tracking-wide mb-1 block">Final Total Price ($)</label>
-                                        <div className="text-3xl font-black text-white tracking-tight">
-                                            ${((parseFloat(formData.price) || 0) * (1 - (parseFloat(formData.discount) || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </div>
-                                    </div>
-                                </div>
+                            {/* Sale Mode Toggle */}
+                            <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex">
+                                <button
+                                    onClick={() => setSaleType('STOCK')}
+                                    className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all tracking-wider ${saleType === 'STOCK' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    Stock
+                                </button>
+                                <button
+                                    onClick={() => setSaleType('ORDER')}
+                                    className={`flex-1 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all tracking-wider ${saleType === 'ORDER' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    Order
+                                </button>
                             </div>
 
-                            {/* Panel: Logistics */}
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/60">
-                                <SectionHeader icon={Globe} title="Logistics & Sales Mode" color="text-slate-600" />
-
-                                {/* Business Mode Selection */}
-                                <div className="mb-6 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
-                                    <label className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide mb-3 block">Business Type</label>
-                                    <div className="flex bg-white rounded-lg p-1 border border-indigo-200 shadow-sm relative">
-                                        <div className={`absolute top-1 bottom-1 w-[48%] bg-indigo-600 rounded-md transition-all duration-300 ${saleType === 'ORDER' ? 'left-[50%]' : 'left-1'}`}></div>
-                                        <button
-                                            onClick={() => setSaleType('STOCK')}
-                                            className={`flex-1 py-2 text-xs font-bold uppercase relative z-10 transition-colors ${saleType === 'STOCK' ? 'text-white' : 'text-slate-500 hover:text-indigo-600'}`}
-                                        >
-                                            Stock Based
-                                        </button>
-                                        <button
-                                            onClick={() => setSaleType('ORDER')}
-                                            className={`flex-1 py-2 text-xs font-bold uppercase relative z-10 transition-colors ${saleType === 'ORDER' ? 'text-white' : 'text-slate-500 hover:text-indigo-600'}`}
-                                        >
-                                            Order Based
-                                        </button>
-                                    </div>
-                                    <p className="text-[10px] text-indigo-400 mt-2 font-medium px-1">
-                                        {saleType === 'STOCK' ? 'Item will be added to Inventory.' : 'Item will be marked SOLD immediately & Order created.'}
-                                    </p>
-                                </div>
-
-                                {/* Dynamic Fields based on Mode */}
-                                {saleType === 'STOCK' ? (
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <InputField label="Stock Location (Seller)" name="buyer_country" value={formData.buyer_country} onChange={handleChange} placeholder="e.g. India" />
-                                        <InputField label="Buyer Location (Dst)" name="seller_country" value={formData.seller_country} onChange={handleChange} placeholder="e.g. USA" />
-                                    </div>
-                                ) : (
-                                    <div className="animate-in fade-in slide-in-from-top-4 duration-300">
-                                        <ClientForm value={clientData} onChange={setClientData} />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Panel: Client & Sales (Creative Section) */}
-                            <div className={`p-6 rounded-2xl border transition-all ${formData.status === 'sold' ? 'bg-emerald-50 border-emerald-200 shadow-lg' : 'bg-slate-50 border-slate-200'}`}>
-                                <div className="flex justify-between items-center mb-4 pb-2 border-b border-black/5">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`p-1.5 rounded-lg ${formData.status === 'sold' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-600'}`}>
-                                            <User size={14} strokeWidth={3} />
+                            {/* Section 4: Pricing & Economics (Highlighted) */}
+                            <div className="bg-slate-900 rounded-[24px] overflow-hidden shadow-2xl shadow-indigo-200 border border-slate-800 relative group">
+                                <div className="absolute top-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none group-hover:bg-indigo-500/20 transition-all duration-700" />
+                                <div className="p-8 relative z-10">
+                                    <div className="flex items-center gap-3 mb-8">
+                                        <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-xl">
+                                            <TrendingUp size={20} strokeWidth={2.5} />
                                         </div>
-                                        <h3 className={`text-xs font-black uppercase tracking-widest ${formData.status === 'sold' ? 'text-emerald-800' : 'text-slate-600'}`}>Client & Sale</h3>
+                                        <h3 className="text-xs font-black text-white uppercase tracking-widest">Pricing & Economics</h3>
                                     </div>
 
-                                    <label className="flex items-center gap-2 cursor-pointer select-none">
-                                        <span className="text-[10px] font-bold uppercase text-slate-500">Mark Sold</span>
-                                        <div className="relative">
-                                            <input type="checkbox" className="sr-only" checked={formData.status === 'sold'} onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.checked ? 'sold' : 'in_stock' }))} />
-                                            <div className={`w-10 h-6 rounded-full shadow-inner transition-colors ${formData.status === 'sold' ? 'bg-emerald-500' : 'bg-slate-300'}`}></div>
-                                            <div className={`absolute top-1 left-1 bg-white w-4 h-4 rounded-full shadow transition-transform ${formData.status === 'sold' ? 'translate-x-4' : 'translate-x-0'}`}></div>
-                                        </div>
-                                    </label>
-                                </div>
-
-                                <div className="space-y-4">
-                                    {/* Financial Calculations (Unified) */}
-                                    <div className="space-y-4">
-                                        {/* Currency & Exchange */}
-                                        <div className="bg-white/60 p-4 rounded-xl border border-black/5 flex flex-col gap-3">
-                                            <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1"><Calculator size={10} /> Currency & Commission</span>
-
-                                            <div className="flex gap-2 items-end">
-                                                <div className="flex-1">
-                                                    <label className="text-[9px] font-bold text-slate-400 mb-1 block">Currency</label>
-                                                    <select value={currency} onChange={(e) => setCurrency(e.target.value)} className="w-full px-2 py-1.5 text-xs font-bold border rounded uppercase bg-white h-9">
-                                                        <option value="USD">USD</option>
-                                                        <option value="INR">INR</option>
-                                                    </select>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <label className="text-[9px] font-bold text-slate-400 mb-1 block">Rate (1$)</label>
-                                                    <input type="number" placeholder="85.0" className="w-full px-2 py-1.5 text-xs font-bold border rounded h-9" value={exchangeRate} onChange={(e) => setExchangeRate(e.target.value)} />
-                                                </div>
-                                            </div>
-
-                                            {/* Commission Bidirectional */}
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <label className="text-[9px] font-bold text-slate-400 mb-1 block">Comm ($)</label>
-                                                    <input
-                                                        type="number"
-                                                        className="w-full px-2 py-1.5 text-xs font-bold border rounded bg-white text-emerald-600"
-                                                        placeholder="0"
-                                                        value={commissionUSD}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setCommissionUSD(val);
-                                                            // Auto Calc INR
-                                                            if (exchangeRate && val) setCommissionINR((parseFloat(val) * parseFloat(exchangeRate)).toFixed(2));
-                                                            else if (!val) setCommissionINR('');
-                                                        }}
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="text-[9px] font-bold text-slate-400 mb-1 block">Comm (₹)</label>
-                                                    <input
-                                                        type="number"
-                                                        className="w-full px-2 py-1.5 text-xs font-bold border rounded bg-white text-emerald-600"
-                                                        placeholder="0"
-                                                        value={commissionINR}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setCommissionINR(val);
-                                                            // Auto Calc USD
-                                                            if (exchangeRate && val) setCommissionUSD((parseFloat(val) / parseFloat(exchangeRate)).toFixed(2));
-                                                            else if (!val) setCommissionUSD('');
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Final Pricing */}
-                                        <div className="flex flex-col gap-2">
-                                            <div className="flex items-center justify-between px-1">
-                                                <label className="text-[10px] font-bold text-emerald-600 uppercase">Final Sale Price</label>
-                                                <span className="text-[10px] font-bold text-slate-400">
-                                                    (Base: ${parseFloat(formData.price || 0).toLocaleString()} - Disc: {formData.discount}%)
-                                                </span>
-                                            </div>
-
-                                            <div className="relative">
-                                                <div className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-slate-400">$</div>
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rap / Base ($)</label>
                                                 <input
-                                                    type="number"
-                                                    name="sale_price"
-                                                    value={formData.sale_price}
-                                                    onChange={(e) => setFormData(prev => ({ ...prev, sale_price: e.target.value }))}
-                                                    className="w-full pl-7 px-4 py-3 text-xl font-bold text-emerald-700 bg-white border-2 border-emerald-300 rounded-xl focus:border-emerald-500 outline-none transition-all placeholder:text-emerald-200/50"
+                                                    type="number" step="0.01" value={pricePerCarat} onChange={(e) => setPricePerCarat(e.target.value)}
+                                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-indigo-500 outline-none transition-all placeholder:text-slate-600"
+                                                    placeholder="Per Ct"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discount %</label>
+                                                <input
+                                                    type="number" step="0.01" name="discount" value={formData.discount} onChange={handleChange}
+                                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-indigo-500 outline-none transition-all placeholder:text-slate-600"
                                                     placeholder="0.00"
                                                 />
                                             </div>
+                                        </div>
 
-                                            {/* Exchange Calculation Display */}
-                                            {exchangeRate && formData.sale_price && (
-                                                <div className="text-right text-xs font-black text-slate-500 bg-slate-100 px-3 py-1 rounded-lg">
-                                                    ~ ₹ {(parseFloat(formData.sale_price) * parseFloat(exchangeRate)).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                                                </div>
-                                            )}
+                                        <div className="pt-6 border-t border-slate-800/50">
+                                            <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-[0.2em] mb-3 block">Calculated Value (USD)</label>
+                                            <div className="text-5xl font-black text-white tracking-tighter drop-shadow-sm">
+                                                <span className="text-emerald-500 text-3xl mr-1">$</span>
+                                                {((parseFloat(formData.price) || 0) * (1 - (parseFloat(formData.discount) || 0) / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </div>
+                                            <div className="flex items-center gap-2 mt-4 text-[11px] font-bold text-slate-500 bg-white/5 py-2 px-3 rounded-lg w-fit">
+                                                <Info size={12} className="text-indigo-400" />
+                                                Estimated Export Valuation
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
+
+
                         </div>
                     </div>
                 </div>
 
-                {/* Footer Actions */}
-                <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-white z-10">
-                    <button onClick={onClose} className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">Cancel</button>
-                    <button
-                        onClick={handleSubmit}
-                        disabled={loading}
-                        className="px-8 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2 active:scale-95"
-                    >
-                        {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                        {loading ? 'Saving Inventory...' : 'Save Diamond'}
-                    </button>
-                </div>
+                {/* --- FOOTER --- */}
+                <footer className="px-8 py-5 bg-white border-t border-slate-100 flex justify-between items-center z-20">
+                    <div className="hidden md:flex items-center gap-6 text-slate-400">
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Auto-Saving Enabled</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span className="text-[10px] font-bold uppercase tracking-widest">Enterprise Encrypted</span>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4 w-full md:w-auto">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 md:flex-none px-10 py-3.5 text-sm font-black text-slate-500 hover:bg-slate-100 rounded-2xl transition-all"
+                        >
+                            CANCEL
+                        </button>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={loading}
+                            className="flex-1 md:flex-none px-12 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-black rounded-2xl shadow-[0_10px_30px_rgba(79,70,229,0.3)] hover:shadow-indigo-400/40 transition-all flex items-center justify-center gap-3 active:scale-95 group disabled:opacity-70"
+                        >
+                            {loading ? (
+                                <div className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin" />
+                            ) : (
+                                <>
+                                    <span>COMMIT ASSET</span>
+                                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </footer>
             </div>
         </div>
     );

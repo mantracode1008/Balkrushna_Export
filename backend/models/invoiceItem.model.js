@@ -7,6 +7,9 @@ module.exports = (sequelize, Sequelize) => {
         sale_price: {
             type: Sequelize.DECIMAL(10, 2)
         },
+        price: { // Cost Price
+            type: Sequelize.DECIMAL(10, 2)
+        },
         commission: {
             type: Sequelize.DECIMAL(10, 2),
             defaultValue: 0
