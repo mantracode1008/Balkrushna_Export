@@ -13,8 +13,6 @@ api.interceptors.request.use(
         if (user && user.accessToken) {
             console.log("API Interceptor | Attaching Token:", user.accessToken.substring(0, 10) + "...");
             config.headers["x-access-token"] = user.accessToken;
-        } else {
-            console.warn("API Interceptor | No Token Found in LocalStorage User");
         }
         return config;
     },

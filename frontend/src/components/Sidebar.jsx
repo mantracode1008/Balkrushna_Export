@@ -18,7 +18,6 @@ const Sidebar = () => {
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/inventory', label: 'Inventory', icon: Diamond },
         { path: '/invoices', label: 'Invoices', icon: FileText },
-        { path: '/payments', label: 'Payments', icon: CheckCircle2 }, // New Link
         { path: '/history', label: 'History', icon: Hexagon }, // Reuse Hexagon or other icon
     ];
 

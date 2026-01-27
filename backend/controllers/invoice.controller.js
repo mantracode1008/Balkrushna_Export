@@ -18,17 +18,17 @@ exports.create = async (req, res) => {
     const t = await db.sequelize.transaction();
 
     try {
+        // Initialize Totals
         let totalAmount = 0;
         let totalProfit = 0;
         let invoiceItemsData = [];
+        const exRate = parseFloat(req.body.exchange_rate) || 84; // Default to 84 (approx INR) if not provided
+        const currency = req.body.currency || 'USD';
 
         for (const item of items) {
             const diamond = await Diamond.findByPk(item.diamondId, { transaction: t });
             if (!diamond) throw new Error(`Diamond ${item.diamondId} not found.`);
-            // MODIFIED: Allow 'sold' status if we are generating the invoice for it (post-facto).
-            // Strict check: if it's sold, ensure it's not already on another invoice? 
-            // For now, relax the check. If status is sold, we assume this invoice is the documentation for that sale.
-            // A better check would be: if (diamond.status === 'sold' && await InvoiceItem.count({ where: { diamondId: diamond.id } }) > 0) throw ...
+            // ... (rest of diamond check logic, unchanged) ...
 
             // Checking if already invoiced
             const existingInvoiceItem = await InvoiceItem.findOne({ where: { diamondId: diamond.id }, transaction: t });
@@ -36,23 +36,17 @@ exports.create = async (req, res) => {
                 throw new Error(`Diamond ${diamond.certificate} is already invoiced (Invoice #${existingInvoiceItem.invoiceId}).`);
             }
 
-            // If status is in_cart, allow. If sold, allow (as we just verified it's not invoiced).
-            // if (diamond.status === 'sold') throw new Error(`Diamond ${diamond.certificate} is already sold.`);
-            // User requested that Profit should include the "Commission" (Markup). 
-            // So we do NOT subtract commission from the profit formula.
-            // Formula: unitProfit = salePrice - costPrice.
-            // Extract values from item or defaults
+            // Extract values
             const quantity = item.quantity || 1;
             const salePrice = parseFloat(item.salePrice) || 0;
-            const commission = diamond.commission || 0;
+            const commission = item.commission !== undefined ? parseFloat(item.commission) : (diamond.commission || 0);
 
-            // Calculate Cost Price (Base Price - Discount)
-            // Assuming diamond.price is the base price and diamond.discount is percentage
+            // Cost Calculation
             const basePrice = parseFloat(diamond.price) || 0;
             const discount = parseFloat(diamond.discount) || 0;
             const costPrice = basePrice * (1 - discount / 100);
 
-            // Formula: unitProfit = salePrice - costPrice.
+            // Profit Calculation
             const unitProfit = salePrice - costPrice;
             const totalItemProfit = unitProfit * quantity;
             const totalItemAmount = salePrice * quantity;
@@ -68,18 +62,18 @@ exports.create = async (req, res) => {
                 profit: totalItemProfit
             });
 
-            // Update Diamond Quantity, Status AND Financials for Admin Visibility
+            // Update Diamond Quantity & Status
             const newQuantity = (diamond.quantity || 1) - quantity;
             const newStatus = newQuantity <= 0 ? 'sold' : 'in_stock';
 
             await diamond.update({
                 quantity: newQuantity,
                 status: newStatus,
-                // SYNC SALE DATA TO MASTER DIAMOND RECORD
-                sale_price: salePrice, // Crucial for Admin visibility
+                // SYNC SALE DATA
+                sale_price: salePrice,
                 buyer_name: customerName,
                 sale_date: new Date(),
-                sold_by: req.userId // Track who sold it
+                sold_by: req.userId
             }, { transaction: t });
         }
 
@@ -87,6 +81,10 @@ exports.create = async (req, res) => {
         const dueDays = parseInt(req.body.due_days) || 0;
         const dueDate = new Date();
         dueDate.setDate(dueDate.getDate() + dueDays);
+
+        // Calculate Finals
+        const finalUSD = totalAmount;
+        const finalINR = totalAmount * exRate;
 
         const invoice = await Invoice.create({
             customer_name: customerName,
@@ -96,6 +94,14 @@ exports.create = async (req, res) => {
             created_by: req.userId,
             payment_status: 'Pending',
             remarks: req.body.remarks || '',
+
+            // Financials & Currency
+            currency: currency,
+            exchange_rate: exRate,
+            final_amount_usd: finalUSD,
+            final_amount_inr: finalINR,
+            commission_total_usd: 0, // Placeholder if not tracked globally per invoice
+            commission_total_inr: 0,
 
             // Payment Fields
             payment_terms: req.body.payment_terms || 'Custom',
@@ -317,6 +323,10 @@ exports.exportExcel = async (req, res) => {
                     as: "diamond",
                     include: [{ model: db.admins, as: "creator", attributes: ['name'] }]
                 }]
+            },
+            {
+                model: db.clients,
+                as: "client"
             }],
             order: [['invoice_date', 'DESC']]
         });
@@ -408,17 +418,30 @@ exports.updateStatus = async (req, res) => {
     const { payment_status, remarks } = req.body;
 
     try {
+        const invoice = await Invoice.findByPk(id);
+        if (!invoice) {
+            return res.status(404).send({ message: "Invoice not found." });
+        }
+
         const updateData = {};
-        if (payment_status) updateData.payment_status = payment_status;
+        if (payment_status) {
+            updateData.payment_status = payment_status;
+
+            // Auto-update financials based on status change
+            if (payment_status === 'Paid') {
+                updateData.paid_amount = invoice.total_amount;
+                updateData.balance_due = 0;
+                // We keep due_date as record of when it was supposed to be paid
+            } else if (payment_status === 'Pending') {
+                updateData.paid_amount = 0;
+                updateData.balance_due = invoice.total_amount;
+            }
+        }
         if (remarks !== undefined) updateData.remarks = remarks;
 
-        const [num] = await Invoice.update(updateData, { where: { id: id } });
+        await invoice.update(updateData);
+        res.send({ message: "Invoice status and financials updated successfully." });
 
-        if (num == 1) {
-            res.send({ message: "Invoice status updated successfully." });
-        } else {
-            res.status(404).send({ message: `Cannot update Invoice with id=${id}. Maybe Invoice was not found!` });
-        }
     } catch (err) {
         res.status(500).send({ message: "Error updating Invoice with id=" + id });
     }

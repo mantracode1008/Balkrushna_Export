@@ -8,7 +8,10 @@ const ClientSelect = ({ value, onChange, options = [], placeholder = "Search or 
 
     const filteredOptions = query === ''
         ? options
-        : options.filter((person) => person.buyer_name.toLowerCase().includes(query.toLowerCase()));
+        : options.filter((person) => {
+            const name = person.name || person.buyer_name || person.customer_name || '';
+            return name.toLowerCase().includes(query.toLowerCase());
+        });
 
     useEffect(() => {
         function handleClickOutside(event) {
@@ -66,16 +69,20 @@ const ClientSelect = ({ value, onChange, options = [], placeholder = "Search or 
                                 Register "{query}" as New Client
                             </div>
                         ) : (
-                            filteredOptions.map((person, idx) => (
-                                <div
-                                    key={idx}
-                                    className={`px-5 py-2.5 cursor-pointer hover:bg-slate-50 text-xs font-semibold text-slate-600 flex justify-between items-center ${value === person.buyer_name ? 'bg-indigo-50 text-indigo-700' : ''}`}
-                                    onClick={() => handleSelect(person.buyer_name)}
-                                >
-                                    <span>{person.buyer_name} <span className="text-slate-400 font-normal">({person.buyer_country || 'N/A'})</span></span>
-                                    {value === person.buyer_name && <Check size={14} strokeWidth={3} className="text-indigo-600" />}
-                                </div>
-                            ))
+                            filteredOptions.map((person, idx) => {
+                                const name = person.name || person.buyer_name || person.customer_name;
+                                const country = person.country || person.buyer_country || person.city || '';
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={`px-5 py-2.5 cursor-pointer hover:bg-slate-50 text-xs font-semibold text-slate-600 flex justify-between items-center ${value === name ? 'bg-indigo-50 text-indigo-700' : ''}`}
+                                        onClick={() => handleSelect(name)}
+                                    >
+                                        <span>{name} <span className="text-slate-400 font-normal">{country ? `(${country})` : ''}</span></span>
+                                        {value === name && <Check size={14} strokeWidth={3} className="text-indigo-600" />}
+                                    </div>
+                                );
+                            })
                         )}
                         {filteredOptions.length > 0 && query !== '' && !filteredOptions.some(p => p.buyer_name.toLowerCase() === query.toLowerCase()) && (
                             <div

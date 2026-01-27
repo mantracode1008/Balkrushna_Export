@@ -35,6 +35,13 @@ export const generateInvoiceExcel = (invoices, fileName = 'Invoices_Export') => 
                     "Date": new Date(inv.invoice_date).toLocaleDateString(),
                     "Client": inv.customer_name,
 
+                    // Client Details
+                    "Client Address": inv.client ? inv.client.address : '',
+                    "Client City": inv.client ? inv.client.city : '',
+                    "Client Phone": inv.client ? inv.client.mobile : '',
+                    "Client Email": inv.client ? inv.client.email : '',
+                    "Client Pincode": inv.client ? inv.client.pincode : '',
+
                     // Diamond Details
                     "Certificate": d ? d.certificate : 'N/A',
                     "Shape": d ? d.shape : '',
