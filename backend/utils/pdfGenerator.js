@@ -74,16 +74,66 @@ exports.generateInvoicePDF = (invoice, items, res) => {
 
         // --- Bill To Section ---
         const billToTop = 160;
-        doc.roundedRect(40, billToTop, 515, 60, 5).fill(lightGray).stroke('#E5E7EB');
+        const client = invoice.client;
+
+        // Expand box height to accommodate more client details
+        const billToHeight = client ? 100 : 60;
+        doc.roundedRect(40, billToTop, 515, billToHeight, 5).fill(lightGray).stroke('#E5E7EB');
 
         doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(10)
             .text('BILL TO:', 55, billToTop + 15);
 
+        let billY = billToTop + 30;
+
+        // Customer/Company Name
         doc.fillColor('black').font('Helvetica-Bold').fontSize(12)
-            .text(invoice.customer_name || 'Valued Customer', 55, billToTop + 30);
+            .text(invoice.customer_name || 'Valued Customer', 55, billY);
+        billY += 15;
+
+        // If client details exist, show complete information
+        if (client) {
+            doc.font('Helvetica').fontSize(9).fillColor(grayColor);
+
+            // Company Name (if different from customer name)
+            if (client.company_name && client.company_name !== invoice.customer_name) {
+                doc.text(client.company_name, 55, billY);
+                billY += 12;
+            }
+
+            // Address
+            if (client.address) {
+                doc.text(client.address, 55, billY, { width: 250 });
+                billY += 12;
+            }
+
+            // City, Country
+            const location = [client.city, client.country].filter(Boolean).join(', ');
+            if (location) {
+                doc.text(location, 55, billY);
+                billY += 12;
+            }
+
+            // Contact Info (on the right side of the box)
+            const contactX = 320;
+            let contactY = billToTop + 30;
+
+            doc.font('Helvetica-Bold').fontSize(9).fillColor(primaryColor);
+            doc.text('CONTACT:', contactX, contactY);
+            contactY += 12;
+
+            doc.font('Helvetica').fontSize(9).fillColor(grayColor);
+            if (client.contact_number) {
+                doc.text(`Tel: ${client.contact_number}`, contactX, contactY);
+                contactY += 12;
+            }
+            if (client.email) {
+                doc.text(`Email: ${client.email}`, contactX, contactY, { width: 220 });
+            }
+        }
 
         // --- Table Header ---
-        const tableTop = 250;
+        // Adjust tableTop based on client box height
+        const tableTop = client ? 280 : 250;
         // Columns: No, Desc, Cert, Shape, Color, Clarity, BasePrice, Disc, Net
         // X Positions
         const xNo = 40;

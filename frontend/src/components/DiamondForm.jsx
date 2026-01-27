@@ -322,7 +322,8 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
             }, 1000);
         } catch (error) {
             console.error("Save Error:", error);
-            alert(error.response?.data?.message || "Failed to save diamond.");
+            const msg = error.response?.data?.message || error.message || "Failed to save diamond.";
+            alert(`Save Error: ${msg}`);
         } finally { setLoading(false); }
     };
 

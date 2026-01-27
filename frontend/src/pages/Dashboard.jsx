@@ -101,9 +101,8 @@ const Dashboard = () => {
     if (!summary) return <div className="p-8 text-center text-slate-500">Failed to load dashboard data.</div>;
 
     // Metrics Calculation
-    const totalStaff = staffList.length;
-    const totalAdmins = staffList.filter(s => s.role === 'admin').length + 1; // +1 for Super Admin
-    // const totalClients = 0; // Placeholder if client tracking is added later
+    const staffCount = staffList.filter(s => s.role === 'staff').length;
+    const adminCount = staffList.filter(s => s.role === 'admin').length;
 
     return (
         <div className="space-y-8 animate-fade-in pb-12">
@@ -130,25 +129,7 @@ const Dashboard = () => {
             </div>
 
             {/* Key Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Net Profit Card */}
-                <div className="bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl p-6 text-white shadow-xl shadow-indigo-200 relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform duration-500">
-                        <DollarSign className="w-32 h-32" />
-                    </div>
-                    <div className="relative z-10">
-                        <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center mb-4">
-                            <TrendingUp className="w-6 h-6 text-white" />
-                        </div>
-                        <p className="text-indigo-100 font-medium text-sm">Net Profit (Realized)</p>
-                        <h3 className="text-3xl font-black mt-1 tracking-tight">
-                            ${summary.grandTotal.total_profit?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                        </h3>
-                        <div className="mt-4 flex items-center gap-2 text-xs font-bold bg-white/10 w-fit px-2 py-1 rounded-lg">
-                            <ArrowUpRight className="w-3 h-3" /> +12.5% vs last month
-                        </div>
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
                 {/* Inventory Value */}
                 <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 group">
@@ -194,9 +175,11 @@ const Dashboard = () => {
                     <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-lg transition-all duration-300 group">
                         <div className="flex justify-between items-start">
                             <div>
-                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Active Staff</p>
-                                <h3 className="text-2xl font-black text-slate-800 mt-2">
-                                    {totalStaff} <span className="text-sm font-medium text-slate-400">/ {totalAdmins} Admins</span>
+                                <p className="text-slate-500 font-bold text-xs uppercase tracking-wider">Team Overview</p>
+                                <h3 className="text-2xl font-black text-slate-800 mt-2 flex items-baseline gap-1">
+                                    {staffCount} <span className="text-sm font-medium text-slate-400 mr-2">Staff</span>
+                                    <span className="text-slate-200">/</span>
+                                    <span className="ml-1">{adminCount}</span> <span className="text-sm font-medium text-slate-400">Admins</span>
                                 </h3>
                             </div>
                             <div className="w-10 h-10 bg-violet-50 text-violet-600 rounded-lg flex items-center justify-center group-hover:bg-violet-600 group-hover:text-white transition-colors duration-300">
@@ -204,14 +187,14 @@ const Dashboard = () => {
                             </div>
                         </div>
                         <div className="mt-4 flex -space-x-2">
-                            {[...Array(Math.min(5, totalStaff))].map((_, i) => (
+                            {[...Array(Math.min(5, staffList.length))].map((_, i) => (
                                 <div key={i} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-xs font-bold text-slate-500">
                                     {String.fromCharCode(65 + i)}
                                 </div>
                             ))}
-                            {totalStaff > 5 && (
+                            {staffList.length > 5 && (
                                 <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center text-xs font-bold text-slate-500">
-                                    +{totalStaff - 5}
+                                    +{staffList.length - 5}
                                 </div>
                             )}
                         </div>
@@ -223,7 +206,7 @@ const Dashboard = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
                 {/* Profit by Staff Chart (Big) */}
-                <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className={`${isAdmin ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow`}>
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -261,44 +244,46 @@ const Dashboard = () => {
                     </div>
                 </div>
 
-                {/* Inventory Distribution (Small) */}
-                <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="mb-6">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                            <PieChart className="w-5 h-5 text-purple-500" />
-                            {isAdmin ? "Inventory Ownership" : "My Inventory"}
-                        </h3>
-                        <p className="text-sm text-slate-400">
-                            {isAdmin ? "Stock distribution by staff" : "Your stock distribution"}
-                        </p>
-                    </div>
-                    <div className="h-[250px] flex items-center justify-center relative">
-                        {inventoryDistribution ? <Doughnut data={inventoryDistribution} options={{
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            cutout: '70%',
-                            plugins: {
-                                legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } }
-                            }
-                        }} /> : <div className="text-slate-400">No Data</div>}
-                        {/* Center Text */}
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
-                            <span className="text-3xl font-black text-slate-800">{summary.grandTotal.total_count}</span>
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Stones</span>
+                {/* Inventory Distribution (Small) - Only for Admin */}
+                {isAdmin && (
+                    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="mb-6">
+                            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <PieChart className="w-5 h-5 text-purple-500" />
+                                Inventory Ownership
+                            </h3>
+                            <p className="text-sm text-slate-400">
+                                Stock distribution by staff
+                            </p>
+                        </div>
+                        <div className="h-[250px] flex items-center justify-center relative">
+                            {inventoryDistribution ? <Doughnut data={inventoryDistribution} options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '70%',
+                                plugins: {
+                                    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 11 } } }
+                                }
+                            }} /> : <div className="text-slate-400">No Data</div>}
+                            {/* Center Text */}
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                                <span className="text-3xl font-black text-slate-800">{summary.grandTotal.total_count}</span>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Stones</span>
+                            </div>
+                        </div>
+
+                        {/* Quick Stat */}
+                        <div className="mt-8 bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+                            <span className="text-sm font-bold text-slate-600">Top Performer</span>
+                            <span className="text-sm font-black text-emerald-600">
+                                {/* Simple logic to find top performer name from data */}
+                                {summary.breakdown && summary.breakdown.length > 0
+                                    ? summary.breakdown.reduce((prev, current) => (parseFloat(prev.total_profit) > parseFloat(current.total_profit)) ? prev : current).staff_name
+                                    : "N/A"}
+                            </span>
                         </div>
                     </div>
-
-                    {/* Quick Stat */}
-                    <div className="mt-8 bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-                        <span className="text-sm font-bold text-slate-600">Top Performer</span>
-                        <span className="text-sm font-black text-emerald-600">
-                            {/* Simple logic to find top performer name from data */}
-                            {summary.breakdown && summary.breakdown.length > 0
-                                ? summary.breakdown.reduce((prev, current) => (parseFloat(prev.total_profit) > parseFloat(current.total_profit)) ? prev : current).staff_name
-                                : "N/A"}
-                        </span>
-                    </div>
-                </div>
+                )}
 
             </div>
         </div>

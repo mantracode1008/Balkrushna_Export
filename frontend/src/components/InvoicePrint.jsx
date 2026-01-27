@@ -39,11 +39,37 @@ const InvoicePrint = () => {
     useEffect(() => {
         const fetchInvoice = async () => {
             try {
-                const res = await invoiceService.getAll(); // Or getById if available efficiently
-                // Since efficient getById isn't exposed in service but exists in backend, we can try filtered find or just add getById to service.
-                // Assuming getAll returns all, we filter.
-                const found = res.data.find(inv => inv.id === Number(id));
-                if (found) setInvoice(found);
+                const res = await invoiceService.getAll();
+                const ids = id.toString().split(',').map(Number); // Handle "1,2,3"
+
+                const foundInvoices = res.data.filter(inv => ids.includes(inv.id));
+
+                if (foundInvoices.length === 0) {
+                    setInvoice(null);
+                    return;
+                }
+
+                if (foundInvoices.length === 1) {
+                    setInvoice(foundInvoices[0]);
+                } else {
+                    // Merge Logic
+                    const primary = foundInvoices[0]; // Use first for client details
+
+                    const mergedInvoice = {
+                        ...primary,
+                        id: ids.join(', '), // Display all IDs
+                        // Sum Financials
+                        subtotal_amount: foundInvoices.reduce((sum, inv) => sum + parseFloat(inv.subtotal_amount || inv.total_amount || 0), 0),
+                        cgst_amount: foundInvoices.reduce((sum, inv) => sum + parseFloat(inv.cgst_amount || 0), 0),
+                        sgst_amount: foundInvoices.reduce((sum, inv) => sum + parseFloat(inv.sgst_amount || 0), 0),
+                        grand_total: foundInvoices.reduce((sum, inv) => sum + parseFloat(inv.grand_total || inv.total_amount || 0), 0),
+                        paid_amount: foundInvoices.reduce((sum, inv) => sum + parseFloat(inv.paid_amount || 0), 0),
+                        balance_due: foundInvoices.reduce((sum, inv) => sum + parseFloat(inv.balance_due || 0), 0),
+                        // Merge Items
+                        items: foundInvoices.flatMap(inv => inv.items || [])
+                    };
+                    setInvoice(mergedInvoice);
+                }
             } catch (err) {
                 console.error("Error fetching invoice", err);
             } finally {
@@ -61,6 +87,18 @@ const InvoicePrint = () => {
 
     // Calculate total base and other metrics for display if needed
     // Note: invoice.total_amount is the final amount stored in DB.
+
+    // Helper for Currency Symbol
+    const getCurrencySymbol = (currency) => {
+        if (!currency) return '₹'; // Default
+        if (currency === 'USD') return '$';
+        if (currency === 'EUR') return '€';
+        if (currency === 'GBP') return '£';
+        if (currency === 'INR') return '₹';
+        return currency + ' ';
+    };
+
+    const currencySymbol = getCurrencySymbol(invoice.currency);
 
     return (
         <div className="bg-slate-100 min-h-screen p-8 print:p-0 print:bg-white flex justify-center">
@@ -89,6 +127,11 @@ const InvoicePrint = () => {
                             <p>Opera House, Mumbai, India</p>
                             <p>contact@balkrishnaexports.com</p>
                             <p>+91 98765 43210</p>
+                            {invoice.gst_number && (
+                                <p className="mt-2 text-slate-700 font-semibold">
+                                    <span className="text-slate-400">GST No:</span> {invoice.gst_number}
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -114,9 +157,46 @@ const InvoicePrint = () => {
 
                 {/* Bill To */}
                 <div className="mb-8 bg-slate-50 p-6 rounded-lg border border-slate-100 print:bg-transparent print:border-slate-200">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bill To</p>
-                    <h3 className="text-xl font-bold text-slate-800">{invoice.customer_name}</h3>
-                    {/* Access dummy address or just name */}
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Bill To</p>
+                    <div className="grid grid-cols-2 gap-6">
+                        {/* Left Column - Name & Address */}
+                        <div>
+                            <h3 className="text-xl font-bold text-slate-800 mb-2">{invoice.customer_name}</h3>
+                            {invoice.client && (
+                                <div className="text-xs text-slate-600 space-y-1">
+                                    {invoice.client.company_name && invoice.client.company_name !== invoice.customer_name && (
+                                        <p className="font-medium">{invoice.client.company_name}</p>
+                                    )}
+                                    {invoice.client.address && (
+                                        <p>{invoice.client.address}</p>
+                                    )}
+                                    {(invoice.client.city || invoice.client.country) && (
+                                        <p>{[invoice.client.city, invoice.client.country].filter(Boolean).join(', ')}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right Column - Contact Info */}
+                        {invoice.client && (invoice.client.contact_number || invoice.client.email) && (
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Contact</p>
+                                <div className="text-xs text-slate-600 space-y-1">
+                                    {invoice.client.contact_number && (
+                                        <p><span className="font-medium">Tel:</span> {invoice.client.contact_number}</p>
+                                    )}
+                                    {invoice.client.email && (
+                                        <p><span className="font-medium">Email:</span> {invoice.client.email}</p>
+                                    )}
+                                    {invoice.client.gst_number && (
+                                        <p className="mt-2 pt-2 border-t border-slate-200">
+                                            <span className="font-semibold text-slate-700">GST No:</span> {invoice.client.gst_number}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Items Table */}
@@ -127,69 +207,54 @@ const InvoicePrint = () => {
                                 <th className="py-3 px-2 font-bold text-slate-600">No.</th>
                                 <th className="py-3 px-2 font-bold text-slate-600">Certificate</th>
                                 <th className="py-3 px-2 font-bold text-slate-600">Shape</th>
+                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Carat</th>
                                 <th className="py-3 px-2 font-bold text-slate-600">Color</th>
                                 <th className="py-3 px-2 font-bold text-slate-600">Clarity</th>
-                                <th className="py-3 px-2 font-bold text-slate-600 text-center">Origin</th>
-                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Carat</th>
-                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Rate (₹/ct)</th>
-                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Disc %</th>
-                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Net Rate</th>
-                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Total</th>
+                                <th className="py-3 px-2 font-bold text-slate-600">Cut</th>
+                                <th className="py-3 px-2 font-bold text-slate-600">Polish</th>
+                                <th className="py-3 px-2 font-bold text-slate-600">Symmetry</th>
+                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Rate / Carat</th>
+                                <th className="py-3 px-2 font-bold text-slate-600 text-right">Amount</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {items.map((item, idx) => {
                                 const d = item.diamond || {};
 
-                                // Calculations
-                                // ratePerCt = Base Price / Carat
-                                // If item has baseTotal (we don't store baseTotal in DB invoice item usually, 
-                                // we store sale_price, profit, commission).
-                                // We can infer Base Rate from diamond.price (Cost Price) IF sale price wasn't arbitrarily set.
-                                // BUT in our Order.jsx, we calculate Sale Price from Base.
-                                // Let's try to reverse engineer or rely on stored data. 
-                                // Actually, `diamond.price` is the Base Price (Cost/List) in our system logic.
+                                // Use Billed Values (Client Currency) if available, else derive
+                                const carat = parseFloat(item.carat_weight || d.carat) || 0;
+                                const exRate = parseFloat(invoice.exchange_rate) || 1;
 
-                                // Rate (₹/ct)
-                                const carat = parseFloat(d.carat) || 0;
-                                const basePriceTotal = parseFloat(d.price) || 0; // "Rate" usually refers to Per Carat in diamond industry.
-                                const ratePerCt = carat > 0 ? basePriceTotal / carat : 0;
+                                // Client Currency Values
+                                const clientAmount = parseFloat(item.billed_amount || (item.sale_price * exRate) || 0);
+                                const clientRate = parseFloat(item.billed_rate || (item.rate_per_carat * exRate) || 0);
 
-                                // Disc % 
-                                // We only stored commission and profit in DB item. We didn't explicitly store "discountPercent" in InvoiceItem model!
-                                // We stored `sale_price`, `profit`, `commission`.
-                                // However, in the diamond record, `discount` is stored! 
-                                // `d.discount` should be the discount used.
-                                const disc = parseFloat(d.discount) || 0;
-
-                                // Net Rate (Per Ct after Disc)
-                                // formula: RatePerCt * (1 - Disc%)
-                                const netRatePerCt = ratePerCt * (1 - disc / 100);
-
-                                // Total Amount (Sale Price)
-                                // In DB `item.sale_price` is the final total for this item.
-                                const totalAmount = parseFloat(item.sale_price) || 0;
+                                // USD Values (for reference)
+                                const usdAmount = parseFloat(item.sale_price || 0);
+                                const usdRate = parseFloat(item.rate_per_carat || (carat > 0 ? usdAmount / carat : 0));
 
                                 return (
                                     <tr key={idx} className="border-b border-slate-50 print:border-slate-200">
                                         <td className="py-3 px-2 text-slate-500">{idx + 1}</td>
                                         <td className="py-3 px-2 font-medium bg-slate-50 print:bg-white">{d.certificate}</td>
                                         <td className="py-3 px-2 text-slate-600">{d.shape}</td>
+                                        <td className="py-3 px-2 text-right text-slate-600 font-medium">{carat.toFixed(2)}</td>
                                         <td className="py-3 px-2 text-slate-600">{d.color}</td>
                                         <td className="py-3 px-2 text-slate-600">{d.clarity}</td>
-                                        <td className="py-3 px-2 text-center text-slate-500 text-[10px]">{d.seller_country || '-'}</td>
-                                        <td className="py-3 px-2 text-right text-slate-600 font-medium">{carat.toFixed(2)}</td>
-                                        <td className="py-3 px-2 text-right text-slate-600">
-                                            ₹{ratePerCt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                                        </td>
-                                        <td className="py-3 px-2 text-right text-red-500">
-                                            {disc > 0 ? `${disc.toFixed(2)}%` : '-'}
-                                        </td>
-                                        <td className="py-3 px-2 text-right text-slate-600">
-                                            ₹{netRatePerCt.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                                        <td className="py-3 px-2 text-slate-600 text-xs">{d.cut || '-'}</td>
+                                        <td className="py-3 px-2 text-slate-600 text-xs">{d.polish || '-'}</td>
+                                        <td className="py-3 px-2 text-slate-600 text-xs">{d.symmetry || '-'}</td>
+                                        <td className="py-3 px-2 text-right text-slate-700 font-semibold">
+                                            <div>{currencySymbol}{clientRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                            {invoice.currency !== 'USD' && (
+                                                <div className="text-[9px] text-slate-400 font-mono mt-0.5">(${usdRate.toLocaleString(undefined, { minimumFractionDigits: 2 })})</div>
+                                            )}
                                         </td>
                                         <td className="py-3 px-2 text-right font-bold text-slate-800">
-                                            ₹{totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            <div>{currencySymbol}{clientAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                                            {invoice.currency !== 'USD' && (
+                                                <div className="text-[9px] text-slate-400 font-mono mt-0.5">(${usdAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })})</div>
+                                            )}
                                         </td>
                                     </tr>
                                 );
@@ -198,25 +263,76 @@ const InvoicePrint = () => {
                     </table>
                 </div>
 
+
                 {/* Footer Totals */}
                 <div className="flex flex-col items-end mt-8 border-t-2 border-slate-100 pt-6">
                     <div className="w-1/3 min-w-[300px]">
                         <div className="flex justify-between py-2 text-sm">
-                            <span className="font-medium text-slate-500">Subtotal</span>
-                            <span className="font-bold text-slate-800">
-                                ₹{parseFloat(invoice.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </span>
+                            <span className="font-medium text-slate-500">Subtotal (Diamond Amount)</span>
+                            <div className="text-right">
+                                <div className="font-bold text-slate-800">
+                                    {currencySymbol}{parseFloat(invoice.subtotal_amount || ((invoice.subtotal_usd || invoice.total_amount || 0) * (invoice.exchange_rate || 1))).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </div>
+                                {invoice.currency !== 'USD' && (
+                                    <div className="text-[10px] text-slate-400 font-mono">
+                                        (${parseFloat(invoice.subtotal_usd || invoice.total_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex justify-between py-2 text-sm border-b border-slate-200">
-                            <span className="font-medium text-slate-500">Tax (0%)</span>
-                            <span className="font-bold text-slate-800">₹0.00</span>
+
+                        {((parseFloat(invoice.cgst_amount) || 0) + (parseFloat(invoice.sgst_amount) || 0)) > 0 && (
+                            <>
+                                <div className="flex justify-between py-1.5 text-sm bg-blue-50/50 px-2 rounded mt-1">
+                                    <span className="font-medium text-blue-600">CGST @ {invoice.cgst_rate || 0.75}%</span>
+                                    <span className="font-semibold text-blue-600">
+                                        {currencySymbol}{parseFloat(invoice.cgst_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between py-1.5 text-sm bg-blue-50/50 px-2 rounded mt-1">
+                                    <span className="font-medium text-blue-600">SGST @ {invoice.sgst_rate || 0.75}%</span>
+                                    <span className="font-semibold text-blue-600">
+                                        {currencySymbol}{parseFloat(invoice.sgst_amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                            </>
+                        )}
+
+                        <div className="flex justify-between py-3 text-lg border-t-2 border-slate-300 mt-2 items-center">
+                            <span className="font-bold text-slate-800">Grand Total</span>
+                            <div className="text-right">
+                                <div className="font-black text-blue-900 text-xl">
+                                    {currencySymbol}{parseFloat(
+                                        invoice.currency === 'USD'
+                                            ? invoice.grand_total
+                                            : (invoice.subtotal_amount ? invoice.grand_total : (invoice.grand_total || invoice.total_amount || 0) * (invoice.exchange_rate || 1))
+                                    ).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </div>
+                                {invoice.currency !== 'USD' && (
+                                    <div className="text-xs text-slate-500 font-bold opacity-60">
+                                        (${parseFloat(invoice.grand_total_usd || ((invoice.grand_total || 0) / (invoice.exchange_rate || 1))).toLocaleString(undefined, { minimumFractionDigits: 2 })})
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex justify-between py-3 text-lg">
-                            <span className="font-bold text-slate-800">Final Total</span>
-                            <span className="font-bold text-blue-900">
-                                ₹{parseFloat(invoice.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </span>
-                        </div>
+
+                        {/* Payment Details */}
+                        {invoice.paid_amount > 0 && (
+                            <>
+                                <div className="flex justify-between py-1.5 text-sm px-2 text-emerald-700 bg-emerald-50 rounded mt-1">
+                                    <span className="font-bold">Amount Paid</span>
+                                    <span className="font-bold">
+                                        {currencySymbol}{parseFloat(invoice.paid_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between py-1.5 text-sm px-2 text-rose-700 bg-rose-50 rounded mt-1">
+                                    <span className="font-bold">Balance Due</span>
+                                    <span className="font-bold">
+                                        {currencySymbol}{parseFloat(invoice.balance_due).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -224,7 +340,11 @@ const InvoicePrint = () => {
                 <div className="mt-6 border-t border-slate-100 pt-4">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Amount in Words</p>
                     <p className="text-sm font-medium text-slate-700 italic">
-                        {numberToWords(parseFloat(invoice.total_amount).toFixed(2))}
+                        {numberToWords(parseFloat(
+                            invoice.currency === 'USD'
+                                ? invoice.grand_total
+                                : (invoice.subtotal_amount ? invoice.grand_total : (invoice.grand_total || invoice.total_amount || 0) * (invoice.exchange_rate || 1))
+                        ).toFixed(2))}
                     </p>
                 </div>
 

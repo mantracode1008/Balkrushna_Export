@@ -4,6 +4,11 @@ const Company = db.companies;
 const Op = db.Sequelize.Op;
 const fs = require('fs');
 
+// GST Configuration
+const GST = {
+    CGST_RATE: 0.75,
+    SGST_RATE: 0.75
+};
 // Helper to ensure companies exist in Master
 
 // Helper to ensure companies exist in Master
@@ -34,46 +39,6 @@ const ensureCompaniesExist = async (diamonds, userId) => {
         console.error("Company Master Update Error:", err);
         // Don't block main flow
     }
-};
-
-exports.create = async (req, res) => {
-    // ... validation ...
-    if (!req.body.certificate) {
-        res.status(400).send({ message: "Content can not be empty!" });
-        return;
-    }
-
-    console.log("Create Diamond Payload:", req.body);
-
-    // Auto-save Company
-    await ensureCompaniesExist(req.body, req.userId);
-
-    // ... existing duplicate check ...
-    try {
-        const existing = await Diamond.findOne({
-            where: {
-                certificate: req.body.certificate,
-                status: 'in_stock'
-            }
-        });
-
-        if (existing) {
-            return res.status(400).send({ message: "Diamond with this Certificate Number is already in stock!" });
-        }
-    } catch (err) {
-        return res.status(500).send({ message: err.message || "Error checking for duplicates." });
-    }
-
-    // ... create logic ...
-    const diamond = {
-        // ... fields ...
-        certificate: req.body.certificate,
-        certificate_date: req.body.certificate_date,
-        // ... Rest of fields ...
-        // (Copied from original file manually in next step if not replacing whole block)
-        // Actually, let's keep original code flow but insert the ensure call.
-    };
-    /* Since we are using replace_file_content, I will target the specific blocks to insert the call. */
 };
 
 const fastcsv = require('fast-csv');
@@ -152,6 +117,9 @@ exports.create = async (req, res) => {
 
     console.log("Create Diamond Payload:", req.body);
 
+    // Auto-save Company
+    await ensureCompaniesExist(req.body, req.userId);
+
     // Check for existing "in_stock" diamond with same certificate
     // We allow duplicates if the old one is "sold" or "in_cart", but "in_stock" must be unique.
     try {
@@ -212,7 +180,6 @@ exports.create = async (req, res) => {
         buyer_country: req.body.buyer_country,
         buyer_mobile: req.body.buyer_mobile,
         sale_price: parseFloat(req.body.sale_price) || 0,
-        growth_process: req.body.growth_process,
         growth_process: req.body.growth_process,
         report_url: req.body.report_url,
         seller_country: req.body.seller_country,
@@ -459,64 +426,100 @@ exports.bulkUpdateStatus = async (req, res) => {
     }
 };
 
-exports.delete = (req, res) => {
+exports.delete = async (req, res) => {
     const id = req.params.id;
+    const t = await db.sequelize.transaction();
 
-    // RBAC: Staff Restriction
-    const whereCondition = { id: id };
-    if (req.userRole === 'staff') {
-        whereCondition.created_by = req.userId;
-    }
+    try {
+        const diamond = await Diamond.findByPk(id, { transaction: t });
+        if (!diamond) {
+            await t.rollback();
+            return res.status(404).send({ message: `Diamond with id=${id} not found.` });
+        }
 
-    Diamond.destroy({
-        where: whereCondition
-    })
-        .then(num => {
-            if (num == 1) {
-                res.send({
-                    message: "Diamond was deleted successfully!"
-                });
-            } else {
-                res.send({
-                    message: `Cannot delete Diamond with id=${id}.`
-                });
-            }
-        })
-        .catch(err => {
-            res.status(500).send({
-                message: "Could not delete Diamond with id=" + id
-            });
+        // Check Status: Cannot delete sold diamonds
+        if (diamond.status === 'sold') {
+            await t.rollback();
+            return res.status(400).send({ message: "Cannot delete a sold diamond as it is linked to an invoice. Please delete the invoice first if you must remove this record." });
+        }
+
+        // RBAC: Staff Restriction
+        const whereCondition = { id: id };
+        if (req.userRole === 'staff') {
+            whereCondition.created_by = req.userId;
+        }
+
+        const num = await Diamond.destroy({
+            where: whereCondition,
+            transaction: t
         });
+
+        if (num == 1) {
+            await t.commit();
+            res.send({ message: "Diamond was deleted successfully!" });
+        } else {
+            await t.rollback();
+            res.status(403).send({ message: `Cannot delete Diamond with id=${id}. You might not have permission.` });
+        }
+    } catch (err) {
+        if (t) await t.rollback();
+        console.error("Delete Error:", err);
+        res.status(500).send({
+            message: err.message || "Could not delete Diamond with id=" + id
+        });
+    }
 };
 
-exports.bulkDelete = (req, res) => {
+exports.bulkDelete = async (req, res) => {
     const ids = req.body.ids;
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
         return res.status(400).send({ message: "No IDs provided for deletion." });
     }
 
-    const whereCondition = { id: ids };
-    if (req.userRole === 'staff') {
-        whereCondition.created_by = req.userId;
-    }
+    const t = await db.sequelize.transaction();
 
-    Diamond.destroy({
-        where: whereCondition
-    })
-        .then(nums => {
-            res.send({ message: `${nums} Diamonds were deleted successfully!` });
-        })
-        .catch(err => {
-            res.status(500).send({
-                message: err.message || "Could not delete diamonds."
-            });
+    try {
+        // 1. Fetch Diamonds to Check Status
+        const diamonds = await Diamond.findAll({
+            where: { id: ids },
+            transaction: t
         });
+
+        const soldDiamonds = diamonds.filter(d => d.status === 'sold');
+        if (soldDiamonds.length > 0) {
+            const certs = soldDiamonds.map(d => d.certificate).join(", ");
+            await t.rollback();
+            return res.status(400).send({
+                message: `Cannot delete items that are already sold: ${certs}. Multiple delete aborted to prevent data inconsistency.`
+            });
+        }
+
+        // 2. Execute Bulk Delete with RBAC
+        const whereCondition = { id: ids };
+        if (req.userRole === 'staff') {
+            whereCondition.created_by = req.userId;
+        }
+
+        const nums = await Diamond.destroy({
+            where: whereCondition,
+            transaction: t
+        });
+
+        await t.commit();
+        res.send({ message: `${nums} Diamonds were deleted successfully!` });
+    } catch (err) {
+        if (t) await t.rollback();
+        console.error("Bulk Delete Error:", err);
+        res.status(500).send({
+            message: err.message || "Could not delete diamonds."
+        });
+    }
 };
 
 // Bulk Sell (Stock -> Sell Multiple to One Client)
 exports.bulkSell = async (req, res) => {
-    const { diamond_ids, client_id, financials } = req.body;
-    // financials: { currency: 'USD'|'INR', exchange_rate: 85, commission_total: 1000, final_total: 50000 }
+    const { diamond_ids, client_id, financials, payment_terms, due_days } = req.body;
+    // financials: { currency: 'USD'|'INR', exchange_rate: 85, commission_total: 1000, final_total_usd: 50000 }
 
     if (!diamond_ids || !Array.isArray(diamond_ids) || diamond_ids.length === 0) {
         return res.status(400).send({ message: "No diamonds selected for sale." });
@@ -528,7 +531,7 @@ exports.bulkSell = async (req, res) => {
     const t = await db.sequelize.transaction();
 
     try {
-        // 1. Fetch Diamonds to calculate totals strictly from DB (security)
+        // 1. Fetch Diamonds
         const diamonds = await Diamond.findAll({
             where: { id: diamond_ids },
             transaction: t
@@ -538,7 +541,7 @@ exports.bulkSell = async (req, res) => {
             throw new Error("Some diamonds not found. Sale aborted.");
         }
 
-        // Check if any already sold
+        // Check if already sold
         const alreadySold = diamonds.filter(d => d.status === 'sold');
         if (alreadySold.length > 0) {
             throw new Error(`Diamond ${alreadySold[0].certificate} is already sold.`);
@@ -548,17 +551,11 @@ exports.bulkSell = async (req, res) => {
         const client = await db.clients.findByPk(client_id, { transaction: t });
         if (!client) throw new Error("Client not found.");
 
-        // 3. Create Invoice
-        // Calculate Totals
-        // Note: For bulk sell, user might override total price? Or we sum up individual prices?
-        // Usually, sum of individual price - global discount + global commission.
-        // Or user sets final packet price.
-        // For now, let's assume financials.final_total is the source of truth if provided, or sum if zero.
-
+        // 3. Financials & Tax Logic
         const exRate = parseFloat(financials.exchange_rate) || 1;
         const currency = financials.currency || 'USD';
 
-        // Basic Sum Check
+        // Base Cost Calculation
         let totalBasePrice = 0;
         diamonds.forEach(d => {
             const price = parseFloat(d.price) || 0; // Cost
@@ -567,18 +564,75 @@ exports.bulkSell = async (req, res) => {
             totalBasePrice += cost;
         });
 
+        // Determine USD Subtotal (Pre-Tax)
+        const subtotalUSD = parseFloat(financials.final_total_usd) || totalBasePrice;
+
+        // Convert to Client Currency
+        const subtotalClient = subtotalUSD * exRate;
+
+        // GST Logic
+        let cgstRate = 0;
+        let sgstRate = 0;
+        let cgstAmount = 0;
+        let sgstAmount = 0;
+
+        // Apply Tax Rule: Only if Currency is INR (User Rule)
+        const country = client.country || 'India';
+        if (currency === 'INR') {
+            cgstRate = GST.CGST_RATE || 0.75;
+            sgstRate = GST.SGST_RATE || 0.75;
+            cgstAmount = (subtotalClient * cgstRate) / 100;
+            sgstAmount = (subtotalClient * sgstRate) / 100;
+        }
+
+        const totalGst = cgstAmount + sgstAmount;
+        const grandTotalClient = subtotalClient + totalGst;
+        const grandTotalUSD = grandTotalClient / exRate;
+
+        // Calculate Due Date
+        let dueDate = null;
+        if (due_days && !isNaN(due_days)) {
+            const d = new Date();
+            d.setDate(d.getDate() + parseInt(due_days));
+            dueDate = d;
+        }
+
         const invoice = await db.invoices.create({
             customer_name: client.name,
             client_id: client.id,
-            total_amount: parseFloat(financials.final_total_usd) || totalBasePrice, // Sale Price
-            total_profit: (parseFloat(financials.final_total_usd) || 0) - totalBasePrice,
+            billing_country: country,
+
+            // USD Fields
+            total_amount: subtotalUSD, // Base USD Subtotal
+            subtotal_usd: parseFloat(subtotalUSD.toFixed(2)),
+            grand_total_usd: parseFloat(grandTotalUSD.toFixed(2)),
+            total_profit: (subtotalUSD - totalBasePrice),
+            final_amount_usd: parseFloat(grandTotalUSD.toFixed(2)),
+
+            // Client Currency Fields
             currency: currency,
             exchange_rate: exRate,
+            final_amount_inr: parseFloat((grandTotalClient * (currency === 'INR' ? 1 : 1)).toFixed(2)), // Simple Store
+
+            // Tax Fields (Client Currency)
+            subtotal_amount: parseFloat(subtotalClient.toFixed(2)),
+            cgst_rate: cgstRate,
+            sgst_rate: sgstRate,
+            cgst_amount: parseFloat(cgstAmount.toFixed(2)),
+            sgst_amount: parseFloat(sgstAmount.toFixed(2)),
+            total_gst: parseFloat(totalGst.toFixed(2)),
+            grand_total: parseFloat(grandTotalClient.toFixed(2)),
+            gst_number: country.trim().toLowerCase() === 'india' ? GST.COMPANY_GST_NUMBER : 'Not Applicable',
+
+            payment_status: 'Pending',
+            payment_terms: payment_terms || 'Net 30',
+            due_days: parseInt(due_days) || 30,
+            due_date: dueDate,
+            created_by: req.userId,
+            paid_amount: 0,
+            balance_due: parseFloat(grandTotalClient.toFixed(2)),
             commission_total_usd: parseFloat(financials.commission_total_usd) || 0,
             commission_total_inr: parseFloat(financials.commission_total_inr) || 0,
-            final_amount_usd: parseFloat(financials.final_total_usd) || 0,
-            final_amount_inr: parseFloat(financials.final_total_inr) || 0,
-            created_by: req.userId
         }, { transaction: t });
 
         // 4. Update Diamonds & Create Invoice Items
@@ -586,32 +640,51 @@ exports.bulkSell = async (req, res) => {
         for (const d of diamonds) {
             // Update Diamond
             d.status = 'sold';
-            d.sale_type = 'STOCK'; // Was from stock
+            d.sale_type = 'STOCK';
             d.client_id = client.id;
             d.sale_date = new Date();
             d.currency = currency;
             d.exchange_rate = exRate;
             d.buyer_name = client.name;
             d.buyer_country = client.country;
-            d.buyer_mobile = client.contact_number; // Sync for legacy views
+            d.buyer_mobile = client.contact_number;
 
-            // Distribute global commission/sale price proportionally? 
-            // Or just mark sold. Let's just mark sold and set Sale Price proportionally if needed.
-            // Simplified: Set Sale Price = Cost (placeholder) or calculate share of total?
-            // Let's set sale_price on diamond as 0 (using Invoice for value) OR proportional.
-            // Best practice: Store actual sale price per diamond if possible.
-            // If bulk price, we can't know individual.
-            // We will store 0 or leave as is, relying on Invoice for financial truth.
+            // Distribute Base Cost & Sale Price Proportionally
+            let ratio = 0;
+            const price = parseFloat(d.price) || 0;
+            const discount = parseFloat(d.discount) || 0;
+            const itemBasePrice = price * (1 - discount / 100); // Cost
 
+            if (totalBasePrice > 0) {
+                ratio = itemBasePrice / totalBasePrice;
+            } else if (diamonds.length > 0) {
+                ratio = 1 / diamonds.length;
+            }
+
+            const itemSalePriceUSD = subtotalUSD * ratio;
+            const carat = parseFloat(d.carat) || 0;
+            const ratePerCaratUSD = carat > 0 ? (itemSalePriceUSD / carat) : 0;
+
+            // Client Currency Values
+            const itemBilledAmount = itemSalePriceUSD * exRate;
+            const itemBilledRate = ratePerCaratUSD * exRate;
+
+            // Save Diamond with USD Sale Price
+            d.sale_price = parseFloat(itemSalePriceUSD.toFixed(2));
             await d.save({ transaction: t });
 
             invoiceItems.push({
                 invoiceId: invoice.id,
                 diamondId: d.id,
                 quantity: 1,
-                price: parseFloat(d.price) || 0, // Cost basis
-                sale_price: 0, // Part of bulk package
-                profit: 0 - (parseFloat(d.price) || 0) // Technically negative profit per item if sale_price is 0, but total invoice handle profit.
+                price: itemBasePrice, // Cost (USD)
+                sale_price: parseFloat(itemSalePriceUSD.toFixed(2)), // Sale (USD)
+                rate_per_carat: parseFloat(ratePerCaratUSD.toFixed(2)), // Rate (USD)
+                carat_weight: carat,
+                profit: parseFloat((itemSalePriceUSD - itemBasePrice).toFixed(2)),
+                // New Fields
+                billed_amount: parseFloat(itemBilledAmount.toFixed(2)),
+                billed_rate: parseFloat(itemBilledRate.toFixed(2))
             });
         }
 
@@ -1275,17 +1348,13 @@ exports.getSummary = async (req, res) => {
                 a.name as staff_name,
                 a.role,
                 COUNT(d.id) as total_count,
-                SUM(d.price * (1 - COALESCE(d.discount, 0) / 100)) as total_expense
+                SUM(COALESCE(d.price, 0) * (1 - COALESCE(d.discount, 0) / 100)) as total_expense
             FROM diamonds d
             LEFT JOIN admins a ON d.created_by = a.id
             WHERE ${inventoryWhere}
             GROUP BY d.created_by
         `;
 
-        // 2. Sales Stats (Group by Invoice Creator) -> CHANGED to Realized Profit from Invoices
-        // Realized Profit = (Invoice Total Profit * (Paid Amount / Total Amount))
-        // If Total Amount is 0, Profit is 0.
-        // We use sql IF to handle division by zero.
         const salesQuery = `
             SELECT 
                 i.created_by as staff_id,
@@ -1293,7 +1362,7 @@ exports.getSummary = async (req, res) => {
                 a.role,
                 SUM(
                     CASE 
-                        WHEN i.total_amount > 0 THEN (i.total_profit * (i.paid_amount / i.total_amount))
+                        WHEN i.total_amount > 0 THEN (COALESCE(i.total_profit, 0) * (COALESCE(i.paid_amount, 0) / i.total_amount))
                         ELSE 0 
                     END
                 ) as total_profit

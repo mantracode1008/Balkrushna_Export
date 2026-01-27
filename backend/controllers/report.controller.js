@@ -170,14 +170,20 @@ exports.getTopSellingItems = async (req, res) => {
         const Diamond = db.diamonds;
 
         // 1. Get Top IDs and Stats (RAW SQL to avoid Sequelize ambiguity issues)
+        let staffFilter = "";
+        if (req.userRole === 'staff') {
+            staffFilter = `JOIN invoices i ON ii.invoiceId = i.id WHERE i.created_by = ${req.userId}`;
+        }
+
         const [topStats] = await sequelize.query(`
             SELECT 
-                diamondId, 
+                ii.diamondId, 
                 SUM(ii.profit) as totalProfit, 
                 SUM(ii.quantity) as totalQuantity, 
                 SUM(ii.sale_price) as totalRevenue
             FROM invoice_items AS ii
-            GROUP BY diamondId
+            ${staffFilter}
+            GROUP BY ii.diamondId
             ORDER BY totalProfit DESC
             LIMIT 5
         `);
@@ -243,8 +249,14 @@ exports.getBuyingStats = async (req, res) => {
             [sequelize.fn('SUM', sequelize.col('price')), 'cost'] // buying cost
         ];
 
+        const whereClause = {};
+        if (req.userRole === 'staff') {
+            whereClause.created_by = req.userId;
+        }
+
         const data = await Diamond.findAll({
             attributes: attributes,
+            where: whereClause,
             group: [sequelize.fn(dateFn, ...dateFnArgs)],
             order: [[sequelize.col('date'), 'ASC']],
             raw: true

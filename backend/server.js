@@ -26,7 +26,7 @@ app.get("/", (req, res) => {
 // Sync DB
 const authController = require("./controllers/auth.controller");
 console.log("Syncing database...");
-db.sequelize.sync({ alter: true })
+db.sequelize.sync()
     .then(() => {
         console.log("Database synced.");
     })

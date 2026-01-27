@@ -33,6 +33,11 @@ module.exports = (sequelize, Sequelize) => {
         },
         created_by: {
             type: Sequelize.INTEGER
+        },
+        gst_number: {
+            type: Sequelize.STRING,
+            allowNull: true,
+            comment: 'Customer GST registration number (optional)'
         }
     });
 

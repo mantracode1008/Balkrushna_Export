@@ -10,6 +10,7 @@ module.exports = function (app) {
     router.get("/:id/excel", [verifyToken], controller.exportExcel); // Single Export
     router.post("/export-excel", [verifyToken], controller.exportExcel); // Bulk Export
     router.delete("/reset", [verifyToken], controller.deleteAll);
+    router.post("/bulk-delete", [verifyToken], controller.bulkDelete);
     router.put("/:id/status", [verifyToken], controller.updateStatus);
     router.post("/:id/payment", [verifyToken], controller.addPayment);
     router.delete("/:id", [verifyToken], controller.delete);

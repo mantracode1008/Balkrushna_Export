@@ -17,7 +17,11 @@ const remove = (id) => {
 };
 
 const deleteAll = () => {
-    return api.delete(`/invoices/reset`);
+    return api.delete("/invoices/reset");
+};
+
+const bulkDelete = (ids) => {
+    return api.post("/invoices/bulk-delete", { ids });
 };
 
 const exportExcel = (id) => {
@@ -42,6 +46,7 @@ const InvoiceService = {
     getPdf,
     delete: remove,
     deleteAll,
+    bulkDelete,
     exportExcel,
     exportBulk,
     exportBulk,

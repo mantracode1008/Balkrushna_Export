@@ -88,8 +88,14 @@ const CSVUpload = ({ onClose, onSuccess }) => {
                         <h2 className="text-2xl font-black text-slate-800 tracking-tight">
                             {step === 'upload' ? 'Import Inventory' : 'Review & Import'}
                         </h2>
-                        <p className="text-sm font-medium text-slate-400 mt-1">
+                        <p className="text-sm font-medium text-slate-400 mt-1 flex items-center gap-2">
                             {step === 'upload' ? 'Upload Excel or CSV files from RapNet' : 'Check data accuracy before finalizing'}
+                            {step === 'upload' && (
+                                <a href="/import_template.csv" download className="text-indigo-600 hover:text-indigo-700 hover:underline flex items-center gap-1 ml-2">
+                                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                                    Download Template
+                                </a>
+                            )}
                         </p>
                     </div>
                     <button onClick={onClose} className="p-2.5 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600">

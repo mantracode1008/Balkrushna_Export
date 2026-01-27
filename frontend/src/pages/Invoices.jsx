@@ -46,6 +46,7 @@ const Invoices = () => {
     const [selectedIds, setSelectedIds] = useState([]);
     const [selectedInvoice, setSelectedInvoice] = useState(null); // For Drawer
     const [showBulkActions, setShowBulkActions] = useState(false);
+    const [error, setError] = useState(null);
 
     // --- DATA LOADING ---
     const loadInvoices = async () => {
@@ -103,13 +104,35 @@ const Invoices = () => {
             return sum + (inr > 0 ? inr : (parseFloat(inv.total_amount || 0) * 85));
         }, 0);
 
-        const profit = data.reduce((sum, inv) => sum + parseFloat(inv.total_profit || 0), 0);
-
         // Dynamic Amounts based on Status
-        const receivedAmount = data.reduce((sum, inv) => sum + parseFloat(inv.paid_amount || 0), 0);
-        const pendingAmount = data.reduce((sum, inv) => sum + parseFloat(inv.balance_due || 0), 0);
+        // Dynamic Amounts based on Status (Normalized)
+        const receivedAmountINR = data.reduce((sum, inv) => {
+            const paid = parseFloat(inv.paid_amount || 0);
+            const rate = parseFloat(inv.exchange_rate || 85);
+            return sum + (inv.currency === 'INR' ? paid : paid * rate);
+        }, 0);
 
-        return { count, totalSalesUSD, totalSalesINR, profit, receivedAmount, pendingAmount };
+        const receivedAmountUSD = data.reduce((sum, inv) => {
+            const paid = parseFloat(inv.paid_amount || 0);
+            const rate = parseFloat(inv.exchange_rate || 85);
+            return sum + (inv.currency === 'USD' ? paid : paid / rate);
+        }, 0);
+
+        const pendingAmountINR = data.reduce((sum, inv) => {
+            const due = parseFloat(inv.balance_due || 0);
+            const rate = parseFloat(inv.exchange_rate || 85);
+            return sum + (inv.currency === 'INR' ? due : due * rate);
+        }, 0);
+
+        const pendingAmountUSD = data.reduce((sum, inv) => {
+            const due = parseFloat(inv.balance_due || 0);
+            const rate = parseFloat(inv.exchange_rate || 85);
+            return sum + (inv.currency === 'USD' ? due : due / rate);
+        }, 0);
+
+        const pendingCount = data.filter(inv => ['Pending', 'Partial', 'Due', 'Overdue'].includes(inv.payment_status)).length;
+
+        return { count, totalSalesUSD, totalSalesINR, receivedAmountINR, receivedAmountUSD, pendingAmountINR, pendingAmountUSD, pendingCount };
     }, [filteredInvoices]);
 
     // --- ACTIONS ---
@@ -128,7 +151,15 @@ const Invoices = () => {
             // Optimistic
             setInvoices(prev => prev.map(inv => {
                 if (inv.id === id) {
-                    const total = parseFloat(inv.total_amount);
+                    // Use grand_total (Client Currency) if available, else derive from Base USD
+                    const rate = parseFloat(inv.exchange_rate || 85);
+                    const baseTotal = parseFloat(inv.total_amount || 0);
+                    const grandClient = parseFloat(inv.grand_total || 0);
+
+                    const total = grandClient > 0
+                        ? grandClient
+                        : (inv.currency === 'INR' ? baseTotal * rate : baseTotal);
+
                     let newPaid = inv.paid_amount;
                     let newBalance = inv.balance_due;
 
@@ -174,6 +205,18 @@ const Invoices = () => {
         }
     };
 
+    const handleBulkDelete = async () => {
+        if (!window.confirm(`Are you sure you want to delete ${selectedIds.length} invoices? This will restore stock for all items.`)) return;
+        try {
+            await invoiceService.bulkDelete(selectedIds);
+            setSelectedIds([]);
+            loadInvoices();
+        } catch (err) {
+            console.error("Bulk delete failed", err);
+            alert(err.response?.data?.message || "Failed to delete selected invoices");
+        }
+    };
+
     const handleExportExcel = (mode, specificId = null) => {
         let dataToExport = [];
         let fileName = 'Invoices';
@@ -196,56 +239,19 @@ const Invoices = () => {
         generateInvoiceExcel(dataToExport, fileName);
     };
 
-    // --- CHART DATA ---
-    const chartData = useMemo(() => {
-        const months = {};
-        invoices.forEach(inv => {
-            const month = new Date(inv.invoice_date).toLocaleString('default', { month: 'short' });
-            if (!months[month]) months[month] = { revenue: 0, profit: 0 };
-            months[month].revenue += parseFloat(inv.total_amount || 0);
-            months[month].profit += parseFloat(inv.total_profit || 0);
-        });
+    const handleBulkPrint = () => {
+        const selectedInvoices = invoices.filter(i => selectedIds.includes(i.id));
+        const clients = new Set(selectedInvoices.map(i => i.customer_name));
 
-        const labels = Object.keys(months);
-        const revenueData = Object.values(months).map(m => m.revenue);
-        const profitData = Object.values(months).map(m => m.profit);
+        if (clients.size > 1) {
+            setError("Cannot print merged invoice: Selected invoices must belong to the SAME Client.");
+            setTimeout(() => setError(null), 4000);
+            return;
+        }
 
-        return {
-            trend: {
-                labels,
-                datasets: [
-                    {
-                        label: 'Revenue',
-                        data: revenueData,
-                        borderColor: '#2563eb', // blue-600
-                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    },
-                    {
-                        label: 'Profit',
-                        data: profitData,
-                        borderColor: '#10b981', // emerald-500
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }
-                ]
-            },
-            status: {
-                labels: ['Paid', 'Due/Partial', 'Overdue'],
-                datasets: [{
-                    data: [
-                        invoices.filter(i => i.payment_status === 'Paid').length,
-                        invoices.filter(i => ['Pending', 'Partial', 'Due'].includes(i.payment_status)).length,
-                        invoices.filter(i => i.payment_status === 'Overdue').length,
-                    ],
-                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                    borderWidth: 0
-                }]
-            }
-        };
-    }, [invoices]);
+        const ids = selectedIds.join(',');
+        window.open(`/invoices/${ids}/print`, '_blank');
+    };
 
     // --- HELPERS ---
     const getDaysRemaining = (dueDate) => {
@@ -261,7 +267,7 @@ const Invoices = () => {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">Invoice Dashboard</h1>
-                    <p className="text-slate-500 mt-1">Manage sales, track payments, and analyze profit.</p>
+                    <p className="text-slate-500 mt-1">Manage sales and track payments.</p>
                 </div>
 
                 <div className="flex gap-3">
@@ -281,7 +287,7 @@ const Invoices = () => {
             </div>
 
             {/* 2. Top Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <StatCard
                     title="Total Invoices"
                     value={stats.count}
@@ -298,26 +304,19 @@ const Invoices = () => {
                 />
                 <StatCard
                     title="Received Amount"
-                    value={`$${stats.receivedAmount.toLocaleString()}`}
+                    value={`₹${stats.receivedAmountINR.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                     icon={CheckCircle}
                     color="emerald"
-                    subtext="Actual Cash In"
+                    subtext={`$${stats.receivedAmountUSD.toLocaleString()}`}
                     highlight
                 />
                 <StatCard
                     title="Pending Amount"
-                    value={`$${stats.pendingAmount.toLocaleString()}`}
+                    value={`₹${stats.pendingAmountINR.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                     icon={AlertCircle}
                     color="rose"
-                    subtext="Outstanding Payments"
+                    subtext={`$${stats.pendingAmountUSD.toLocaleString()}`}
                     warning
-                />
-                <StatCard
-                    title="Total Profit"
-                    value={`$${stats.profit.toLocaleString()}`}
-                    icon={TrendingUp}
-                    color="slate"
-                    subtext={`${((stats.profit / stats.totalSalesUSD || 0) * 100).toFixed(1)}% Margin`}
                 />
             </div>
 
@@ -407,6 +406,8 @@ const Invoices = () => {
                                     const daysRemaining = getDaysRemaining(inv.due_date);
                                     const isSelected = selectedIds.includes(inv.id);
                                     const balanceDue = parseFloat(inv.balance_due || 0);
+                                    const symbol = inv.currency === 'INR' ? '₹' : '$';
+                                    const amount = parseFloat(inv.grand_total || inv.total_amount || 0);
 
                                     return (
                                         <tr key={inv.id} className={`group hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50/40' : ''}`}>
@@ -425,11 +426,11 @@ const Invoices = () => {
                                                 {inv.creator ? inv.creator.name : <span className="text-slate-400 italic">Unknown</span>}
                                             </td>
                                             <td className="p-4">
-                                                <div className="font-bold text-slate-800">${parseFloat(inv.total_amount).toLocaleString()}</div>
+                                                <div className="font-bold text-slate-800">{symbol}{amount.toLocaleString()}</div>
                                             </td>
                                             <td className="p-4">
                                                 <div className={`font-bold ${balanceDue > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
-                                                    ${balanceDue.toLocaleString()}
+                                                    {symbol}{balanceDue.toLocaleString()}
                                                 </div>
                                             </td>
                                             <td className="p-4 font-bold text-emerald-600">+${parseFloat(inv.total_profit).toLocaleString()}</td>
@@ -464,68 +465,49 @@ const Invoices = () => {
                 </div>
             </div>
 
-            {/* 5. Mini Analytics */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-indigo-500" /> Revenue & Profit Trend
-                    </h3>
-                    <div className="h-64 w-full">
-                        <Line
-                            data={chartData.trend}
-                            options={{
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                plugins: { legend: { position: 'top' } },
-                                scales: { y: { beginAtZero: true, grid: { color: '#f1f5f9' } }, x: { grid: { display: false } } }
-                            }}
-                        />
-                    </div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5 text-emerald-500" /> Invoice Status
-                    </h3>
-                    <div className="h-64 w-full flex items-center justify-center">
-                        <Doughnut
-                            data={chartData.status}
-                            options={{
-                                responsive: true,
-                                maintainAspectRatio: false,
-                                cutout: '70%',
-                                plugins: { legend: { position: 'bottom' } }
-                            }}
-                        />
-                    </div>
-                </div>
-            </div>
+
 
             {/* 6. Side Drawer (Detail Preview) */}
-            <SideDrawer
+            < SideDrawer
                 invoice={selectedInvoice}
                 onClose={() => setSelectedInvoice(null)}
             />
 
             {/* 7. Bulk Action Floating Bar */}
-            {showBulkActions && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-5">
-                    <span className="font-semibold text-slate-300">{selectedIds.length} Selected</span>
-                    <div className="h-4 w-px bg-slate-700"></div>
-                    <div className="flex gap-2">
-                        <button onClick={() => handleExportExcel('SELECTED')} className="hover:text-emerald-400 transition-colors flex items-center gap-2 text-sm font-medium">
-                            <FileSpreadsheet className="w-4 h-4" /> Export
-                        </button>
-                        <button className="hover:text-blue-400 transition-colors flex items-center gap-2 text-sm font-medium">
-                            <Printer className="w-4 h-4" /> Print
-                        </button>
-                        <button className="hover:text-red-400 transition-colors flex items-center gap-2 text-sm font-medium">
-                            <Trash2 className="w-4 h-4" /> Delete
+            {
+                showBulkActions && (
+                    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-5">
+                        <span className="font-semibold text-slate-300">{selectedIds.length} Selected</span>
+                        <div className="h-4 w-px bg-slate-700"></div>
+                        <div className="flex gap-2">
+                            <button onClick={() => handleExportExcel('SELECTED')} className="hover:text-emerald-400 transition-colors flex items-center gap-2 text-sm font-medium">
+                                <FileSpreadsheet className="w-4 h-4" /> Export
+                            </button>
+                            <button onClick={handleBulkPrint} className="hover:text-blue-400 transition-colors flex items-center gap-2 text-sm font-medium">
+                                <Printer className="w-4 h-4" /> Print
+                            </button>
+                            <button onClick={handleBulkDelete} className="hover:text-red-400 transition-colors flex items-center gap-2 text-sm font-medium">
+                                <Trash2 className="w-4 h-4" /> Delete
+                            </button>
+                        </div>
+                        <button onClick={() => setSelectedIds([])} className="ml-2 hover:bg-slate-800 p-1 rounded-full"><X className="w-4 h-4" /></button>
+                    </div>
+                )
+            }
+
+            {/* Error Popup */}
+            {
+                error && (
+                    <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-rose-500 text-white px-6 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-3 animate-in slide-in-from-top-5 duration-300">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                        <span className="font-semibold text-sm whitespace-nowrap">{error}</span>
+                        <button onClick={() => setError(null)} className="ml-2 p-1 hover:bg-white/20 rounded-full transition-colors">
+                            <X className="w-4 h-4" />
                         </button>
                     </div>
-                    <button onClick={() => setSelectedIds([])} className="ml-2 hover:bg-slate-800 p-1 rounded-full"><X className="w-4 h-4" /></button>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

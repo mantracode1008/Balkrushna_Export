@@ -101,14 +101,18 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
 
     // Auto-Calculate Totals when Base Cost changes
     useEffect(() => {
-        // When base cost changes, if commission_percent is set, re-calculate commission_usd and others
-        if (financials.commission_percent) {
-            setFinancials(prev => recalculateFinancials(prev, totalBaseCost, 'commission_percent', prev.commission_percent));
-        } else {
-            // Otherwise, just update final totals based on existing commission_usd
-            setFinancials(prev => recalculateFinancials(prev, totalBaseCost, null, null));
-        }
-    }, [totalBaseCost, financials.commission_percent, recalculateFinancials]); // Add recalculateFinancials to dependencies
+        // Only trigger recalculation if the TOTAL BASE COST changes (e.g. added/removed items)
+        // We do NOT want this to trigger when the user types in commission fields.
+
+        // Use functional state update to access CURRENT values without adding them to dependency array
+        setFinancials(prev => {
+            if (prev.commission_percent) {
+                return recalculateFinancials(prev, totalBaseCost, 'commission_percent', prev.commission_percent);
+            }
+            return recalculateFinancials(prev, totalBaseCost, null, null);
+        });
+
+    }, [totalBaseCost, recalculateFinancials]);
 
     // Data Step 2 (Extras)
     // Custom Currency State
@@ -165,6 +169,19 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
                 },
                 payment_terms: paymentTerms,
                 due_days: dueDays
+            };
+
+            // Calculate GST for Payload (Snapshot)
+            const subtotal = parseFloat(financials.final_total_usd) || totalBaseCost;
+            const cgst = (subtotal * 0.75) / 100;
+            const sgst = (subtotal * 0.75) / 100;
+            const grandTotal = subtotal + cgst + sgst;
+
+            payload.financials.gst_breakdown = {
+                subtotal: subtotal.toFixed(2),
+                cgst: cgst.toFixed(2),
+                sgst: sgst.toFixed(2),
+                grand_total: grandTotal.toFixed(2)
             };
 
             await diamondService.bulkSell(payload);
@@ -391,13 +408,13 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
                                 </div>
                             </div>
 
-                            <div className="pt-4 border-t border-slate-100">
-                                <label className="text-xs font-black text-slate-800 uppercase mb-2 block">
-                                    Final Payable Amount ({financials.currency})
+                            <div className="pt-4 border-t border-slate-100 bg-slate-50/50 p-4 rounded-xl">
+                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">
+                                    Taxable Amount (Excl. GST)
                                 </label>
                                 <input
                                     type="number"
-                                    className="w-full px-4 py-3 text-xl font-bold bg-slate-900 text-white rounded-xl outline-none"
+                                    className="w-full px-4 py-3 text-lg font-bold bg-white border border-slate-300 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-700"
                                     value={financials.currency === 'USD' ? financials.final_total_usd : financials.final_total_inr}
                                     onChange={(e) => {
                                         const val = parseFloat(e.target.value) || 0;
@@ -419,11 +436,58 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
                                     }}
                                     placeholder="0.00"
                                 />
-                                {financials.currency !== 'USD' && (
-                                    <p className="text-right text-xs font-bold text-slate-500 mt-2">
-                                        = ${parseFloat(financials.final_total_usd || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
-                                    </p>
-                                )}
+
+                                {/* GST Breakdown - Only for India */}
+                                <div className="mt-4 space-y-2">
+                                    {(() => {
+                                        // User Rule: Tax only if Currency is INR
+                                        const isTaxable = financials.currency === 'INR';
+
+                                        const subtotal = parseFloat(financials.currency === 'USD' ? financials.final_total_usd : financials.final_total_inr) || 0;
+
+                                        // Calculate Tax based on Currency
+                                        const taxRate = isTaxable ? 0.0075 : 0;
+                                        const cgst = (subtotal * taxRate);
+                                        const sgst = (subtotal * taxRate);
+                                        const grandTotal = subtotal + cgst + sgst;
+
+                                        return (
+                                            <>
+                                                {isTaxable && (
+                                                    <>
+                                                        <div className="flex justify-between text-xs text-slate-500 px-1">
+                                                            <span>CGST (0.75%)</span>
+                                                            <span className="font-mono">{financials.currency} {cgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-xs text-slate-500 px-1 border-b border-slate-200 pb-2">
+                                                            <span>SGST (0.75%)</span>
+                                                            <span className="font-mono">{financials.currency} {sgst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                <div className="flex justify-between items-center pt-2 px-1">
+                                                    <span className="text-sm font-black text-slate-800 uppercase">Final Payable Amount</span>
+                                                    <div className="text-right">
+                                                        <div className="text-xl font-black text-indigo-600">
+                                                            {financials.currency} {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </div>
+                                                        {!isTaxable && (
+                                                            <div className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full inline-block mt-1">
+                                                                NO TAX (NON-INR)
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                {financials.currency !== 'USD' && (
+                                                    <div className="text-right text-[10px] text-slate-400 font-medium mt-1">
+                                                        = ${(grandTotal / (parseFloat(financials.exchange_rate) || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })} USD
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
                             </div>
                         </div>
                     )}

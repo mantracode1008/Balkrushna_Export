@@ -132,7 +132,11 @@ const Inventory = () => {
             setDeleteId(null);
             setIsBulkDelete(false);
             if (isBulkDelete) setSelectedIds([]);
-        } catch (err) { console.error(err); alert("Failed to delete"); }
+        } catch (err) {
+            console.error(err);
+            const msg = err.response?.data?.message || "Failed to delete items. Ensure none are sold or in use.";
+            alert(msg);
+        }
     };
 
     const handleSelectAll = (e) => setSelectedIds(e.target.checked ? diamonds.map(d => d.id) : []);

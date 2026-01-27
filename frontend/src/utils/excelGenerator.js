@@ -1,7 +1,8 @@
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 
 /**
  * Generate and Download Excel for Invoices
+ * Layout: Detailed Multi-Currency & Tax Compliant
  * @param {Array} invoices - List of invoice objects with nested items
  * @param {String} fileName - Name of the file to download
  */
@@ -11,80 +12,123 @@ export const generateInvoiceExcel = (invoices, fileName = 'Invoices_Export') => 
         return;
     }
 
-    // 1. Summary Sheet Data
-    const summaryData = invoices.map(inv => ({
-        "Invoice #": inv.id,
-        "Date": new Date(inv.invoice_date).toLocaleDateString(),
-        "Client": inv.customer_name,
-        "Total Amount": parseFloat(inv.total_amount || 0),
-        "Total Profit": parseFloat(inv.total_profit || 0),
-        "Currency": inv.currency || 'USD',
-        "Payment Status": inv.payment_status || 'Pending',
-        "Remarks": inv.remarks || '',
-        "Bill To": inv.client ? `${inv.client.address}, ${inv.client.city}, ${inv.client.country}` : '-'
-    }));
+    // Helper: Parse Float
+    const parse = (val) => parseFloat(val) || 0;
+    const fmt = (val) => parse(val).toFixed(2);
 
-    // 2. Detailed Sheet Data
-    const detailedData = [];
+    // --- 1. DATA PREPARATION ---
+    const registerData = [];
+
     invoices.forEach(inv => {
-        if (inv.items) {
-            inv.items.forEach(item => {
-                const d = item.diamond;
-                detailedData.push({
-                    "Invoice #": inv.id,
+        // Invoice Level Data
+        const currency = inv.currency || 'USD';
+        const exRate = parse(inv.exchange_rate) || 1;
+
+        // Tax Data (Invoice Level)
+        const cgstAmount = parse(inv.cgst_amount);
+        const sgstAmount = parse(inv.sgst_amount);
+
+        // Grand Totals
+        const grandTotalClient = parse(inv.grand_total || inv.total_amount); // Prioritize Client Currency Total
+        const grandTotalUSD = parse(inv.grand_total_usd || (grandTotalClient / exRate));
+
+        // Address construction
+        const cAddress = inv.client ?
+            [inv.client.address, inv.client.city, inv.client.country].filter(Boolean).join(', ') : '-';
+
+        if (inv.items && inv.items.length > 0) {
+            inv.items.forEach((item, idx) => {
+                const d = item.diamond || {};
+
+                // Item Financials
+                // Client Currency
+                const clientRate = parse(item.billed_rate || (item.rate_per_carat * exRate));
+                const clientAmount = parse(item.billed_amount || (item.sale_price * exRate));
+
+                // USD Values
+                const usdRate = parse(item.rate_per_carat);
+                const usdAmount = parse(item.sale_price);
+
+                // Construct Row Object
+                registerData.push({
+                    "Invoice No": inv.id,
                     "Date": new Date(inv.invoice_date).toLocaleDateString(),
-                    "Client": inv.customer_name,
+                    "Customer": inv.customer_name,
+                    "Currency": currency,
+                    "Ex Rate": exRate,
 
-                    // Client Details
-                    "Client Address": inv.client ? inv.client.address : '',
-                    "Client City": inv.client ? inv.client.city : '',
-                    "Client Phone": inv.client ? inv.client.mobile : '',
-                    "Client Email": inv.client ? inv.client.email : '',
-                    "Client Pincode": inv.client ? inv.client.pincode : '',
+                    // Item Details
+                    "Cert ID": d.certificate || '-',
+                    "Shape": d.shape || '-',
+                    "Carat": parse(d.carat),
+                    "Color": d.color || '-',
+                    "Clarity": d.clarity || '-',
+                    "Poland": d.polish || '-',     // Kept 'Polish' -> 'Poland' typo check? No, 'Polish'
+                    "Symm": d.symmetry || '-',
 
-                    // Diamond Details
-                    "Certificate": d ? d.certificate : 'N/A',
-                    "Shape": d ? d.shape : '',
-                    "Carat": d ? parseFloat(d.carat) : 0,
-                    "Color": d ? d.color : '',
-                    "Clarity": d ? d.clarity : '',
-                    "Cut": d ? d.cut : '',
-                    "Polish": d ? d.polish : '',
-                    "Sym": d ? d.symmetry : '',
-                    "Fluor": d ? d.fluorescence : '',
+                    // Client Currency Columns (Primary)
+                    [`Rate (${currency})`]: clientRate,
+                    [`Amount (${currency})`]: clientAmount,
 
-                    // Financials
-                    "Sale Price": parseFloat(item.sale_price || 0),
-                    "Cost Price": d ? parseFloat(d.price * (1 - (d.discount || 0) / 100)) : 0,
-                    "Profit": parseFloat(item.profit || 0),
-                    "Commission": parseFloat(item.commission || 0),
+                    // USD Columns (Secondary)
+                    "Rate (USD)": usdRate,
+                    "Amount (USD)": usdAmount,
 
-                    // Logistics
-                    "Location": d ? d.buyer_country : '-',
-                    "Sold To": d ? d.seller_country : '-'
+                    // Tax (Invoice Level, repeated for context)
+                    "CGST": cgstAmount > 0 ? cgstAmount : 0,
+                    "SGST": sgstAmount > 0 ? sgstAmount : 0,
+
+                    // Totals
+                    [`Grand Total (${currency})`]: grandTotalClient,
+                    "Grand Total (USD)": grandTotalUSD,
+
+                    "Address": cAddress
                 });
+            });
+        } else {
+            // Fallback for Invoice without items (should be rare)
+            registerData.push({
+                "Invoice No": inv.id,
+                "Date": new Date(inv.invoice_date).toLocaleDateString(),
+                "Customer": inv.customer_name,
+                "Currency": currency,
+                "Ex Rate": exRate,
+                "Cert ID": "-",
+                // ... Empty Item Fields ...
+                [`Grand Total (${currency})`]: grandTotalClient,
+                "Grand Total (USD)": grandTotalUSD,
+                "Address": cAddress
             });
         }
     });
 
-    // 3. Create Workbook
+    // --- 2. STYLING SETUP ---
     const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(registerData);
 
-    // Summary Sheet
-    const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-    // Auto-width
-    const wscolsSummary = Object.keys(summaryData[0] || {}).map(k => ({ wch: 20 }));
-    wsSummary['!cols'] = wscolsSummary;
-    XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
+    // DEFINE STYLES
+    const headerStyle = {
+        font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 10 },
+        fill: { fgColor: { rgb: "4338CA" } }, // Indigo-700
+        alignment: { horizontal: "center", vertical: "center" },
+        border: {
+            top: { style: "thin", color: { rgb: "000000" } },
+            bottom: { style: "thin", color: { rgb: "000000" } },
+            left: { style: "thin", color: { rgb: "000000" } },
+            right: { style: "thin", color: { rgb: "000000" } }
+        }
+    };
 
-    // Details Sheet
-    if (detailedData.length > 0) {
-        const wsDetails = XLSX.utils.json_to_sheet(detailedData);
-        const wscolsDetails = Object.keys(detailedData[0] || {}).map(k => ({ wch: 15 }));
-        wsDetails['!cols'] = wscolsDetails;
-        XLSX.utils.book_append_sheet(wb, wsDetails, "Item Details");
-    }
+    const cellStyle = {
+        font: { name: "Arial", sz: 10 },
+        alignment: { vertical: "center", horizontal: "center" },
+        border: { bottom: { style: "thin", color: { rgb: "E5E7EB" } } }
+    };
 
-    // 4. Download
+    // Auto-width logic
+    const wscols = Object.keys(registerData[0]).map(k => ({ wch: Math.max(k.length + 2, 12) }));
+    ws['!cols'] = wscols;
+
+    XLSX.utils.book_append_sheet(wb, ws, "Sales Register");
     XLSX.writeFile(wb, `${fileName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
 };

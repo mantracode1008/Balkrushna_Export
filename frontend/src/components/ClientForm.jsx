@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Globe, MapPin, Mail, DollarSign, ChevronDown, Phone } from 'lucide-react';
+import { User, Globe, MapPin, Mail, DollarSign, ChevronDown, Phone, Building2 } from 'lucide-react';
 
 const Label = ({ children, required }) => (
     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 block">
@@ -86,13 +86,38 @@ const ClientForm = ({ value, onChange }) => {
                 />
 
                 <InputField
-                    label="Country"
-                    name="country"
-                    value={formData.country}
+                    label="City"
+                    name="city"
+                    value={formData.city}
                     onChange={handleChange}
-                    icon={Globe}
-                    placeholder="e.g. Belgium / USA"
+                    icon={Building2}
+                    placeholder="e.g. Antwerp"
                 />
+
+                <div className="flex flex-col w-full">
+                    <Label>Country</Label>
+                    <div className="relative group">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
+                            <Globe size={16} strokeWidth={2.5} />
+                        </div>
+                        <select
+                            name="country"
+                            value={formData.country}
+                            onChange={handleChange}
+                            className="w-full pl-11 pr-10 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-400 outline-none appearance-none cursor-pointer transition-all shadow-sm"
+                        >
+                            <option value="">Select Country...</option>
+                            <option value="India">India</option>
+                            <option value="USA">USA</option>
+                            <option value="UK">UK</option>
+                            <option value="UAE">UAE</option>
+                            <option value="Hong Kong">Hong Kong</option>
+                            <option value="Belgium">Belgium</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+                    </div>
+                </div>
 
                 <InputField
                     label="Email Address"
