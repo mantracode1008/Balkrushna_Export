@@ -19,7 +19,7 @@ module.exports = (sequelize, Sequelize) => {
         },
         contact_number: {
             type: Sequelize.STRING,
-            allowNull: false
+            allowNull: true
         },
         email: {
             type: Sequelize.STRING

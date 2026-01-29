@@ -80,7 +80,6 @@ const ClientForm = ({ value, onChange }) => {
                     name="contact_number"
                     value={formData.contact_number}
                     onChange={handleChange}
-                    required
                     icon={Phone}
                     placeholder="+1 234 567 890"
                 />
@@ -194,7 +193,7 @@ const ClientForm = ({ value, onChange }) => {
 
             <div className="flex items-center gap-2 text-[10px] font-bold text-indigo-500 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
                 <Info size={14} />
-                Client Name & Contact Number are mandatory.
+                Client Name is mandatory. Everything else is optional.
             </div>
         </div>
     );

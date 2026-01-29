@@ -28,6 +28,9 @@ db.origionalRapRate = require("./origionalRapRate.model.js")(sequelize, Sequeliz
 db.parameterDiscount = require("./parameterDiscount.model.js")(sequelize, Sequelize);
 db.companies = require("./company.model.js")(sequelize, Sequelize);
 db.clients = require("./client.model.js")(sequelize, Sequelize);
+db.sellers = require("./seller.model.js")(sequelize, Sequelize);
+db.sellerPayments = require("./sellerPayment.model.js")(sequelize, Sequelize);
+db.sellerPaymentAllocations = require("./sellerPaymentAllocation.model.js")(sequelize, Sequelize);
 
 // Associations
 db.invoices.hasMany(db.invoiceItems, { as: "items" });
@@ -55,5 +58,26 @@ db.diamonds.belongsTo(db.admins, { foreignKey: "created_by", as: "creator" });
 
 db.admins.hasMany(db.invoices, { foreignKey: "created_by", as: "createdInvoices" });
 db.invoices.belongsTo(db.admins, { foreignKey: "created_by", as: "creator" });
+
+// Seller Associations
+db.sellers.hasMany(db.diamonds, { foreignKey: "seller_id", as: "diamonds" });
+db.diamonds.belongsTo(db.sellers, { foreignKey: "seller_id", as: "seller" });
+
+db.sellers.hasMany(db.sellerPayments, { foreignKey: "seller_id", as: "payments" });
+db.sellerPayments.belongsTo(db.sellers, { foreignKey: "seller_id", as: "seller" });
+
+// Payment Allocation Associations
+db.sellerPayments.hasMany(db.sellerPaymentAllocations, { foreignKey: "payment_id", as: "allocations" });
+db.sellerPaymentAllocations.belongsTo(db.sellerPayments, { foreignKey: "payment_id", as: "payment" });
+
+db.diamonds.hasMany(db.sellerPaymentAllocations, { foreignKey: "diamond_id", as: "payment_allocations" });
+db.sellerPaymentAllocations.belongsTo(db.diamonds, { foreignKey: "diamond_id", as: "diamond" });
+
+// Creator Logic for Sellers
+db.admins.hasMany(db.sellers, { foreignKey: "created_by", as: "createdSellers" });
+db.sellers.belongsTo(db.admins, { foreignKey: "created_by", as: "creator" });
+
+db.admins.hasMany(db.sellerPayments, { foreignKey: "created_by", as: "createdSellerPayments" });
+db.sellerPayments.belongsTo(db.admins, { foreignKey: "created_by", as: "creator" });
 
 module.exports = db;

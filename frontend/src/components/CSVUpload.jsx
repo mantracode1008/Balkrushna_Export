@@ -61,7 +61,32 @@ const CSVUpload = ({ onClose, onSuccess }) => {
 
         setLoading(true);
         try {
-            await diamondService.bulkCreate(allValidRows);
+            const response = await diamondService.bulkCreate(allValidRows);
+            const data = response.data;
+
+            if (data.skippedCount > 0) {
+                // Formatting message
+                let msg = `Request Completed.\n`;
+                msg += `✅ Imported: ${data.importedCount}\n`;
+                msg += `⚠️ Skipped (Duplicate): ${data.skippedCount}\n`;
+
+                if (data.skippedCertificates && data.skippedCertificates.length > 0) {
+                    const shown = data.skippedCertificates.slice(0, 10).join(", ");
+                    const remaining = data.skippedCertificates.length - 10;
+                    msg += `\nSkipped Certificates: ${shown}${remaining > 0 ? `...and ${remaining} more` : ''}`;
+                }
+
+                if (data.importedCount === 0) {
+                    msg += `\n\nNo new diamonds were added because they already exist in the system (Inventory).`;
+                }
+
+                alert(msg);
+            } else {
+                // Pure success
+                // Optional: Show toast or just close
+            }
+
+            // Only close if we actually imported something or if user acknowledged the warning
             onSuccess();
         } catch (err) {
             console.error(err);

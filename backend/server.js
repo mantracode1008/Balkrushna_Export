@@ -42,10 +42,11 @@ db.sequelize.sync({ alter: true })
 require("./routes/auth.routes")(app);
 require("./routes/diamond.routes")(app);
 require("./routes/invoice.routes")(app);
-require("./routes/report.routes")(app);
-require("./routes/pricing.routes")(app);
 require("./routes/company.routes")(app);
 require("./routes/client.routes")(app);
+require("./routes/seller.routes")(app);
+require("./routes/sellerPayment.routes")(app);
+require("./routes/pricing.routes")(app);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

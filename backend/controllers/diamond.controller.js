@@ -41,6 +41,45 @@ const ensureCompaniesExist = async (diamonds, userId) => {
     }
 };
 
+exports.checkStatus = async (req, res) => {
+    const { certificate } = req.params;
+    if (!certificate) return res.status(400).send({ message: "Certificate ID required." });
+
+    try {
+        // Check for SOLD status
+        const soldDiamond = await Diamond.findOne({
+            where: {
+                certificate: certificate,
+                status: 'sold'
+            }
+        });
+
+        if (soldDiamond) {
+            return res.send({ exists: true, status: 'sold', diamond: soldDiamond });
+        }
+
+        // Check for IN STOCK status (Inventory of ANY staff/admin)
+        const stockDiamond = await Diamond.findOne({
+            where: {
+                certificate: certificate,
+                status: 'in_stock'
+            }
+        });
+
+        if (stockDiamond) {
+            return res.send({ exists: true, status: 'in_stock', diamond: stockDiamond });
+        }
+
+        // If neither
+        res.send({ exists: false });
+
+    } catch (err) {
+        console.error("Check Status Error:", err);
+        res.status(500).send({ message: "Error checking diamond status." });
+    }
+};
+
+
 const fastcsv = require('fast-csv');
 const axios = require('axios'); // For external API
 
@@ -184,6 +223,14 @@ exports.create = async (req, res) => {
         report_url: req.body.report_url,
         seller_country: req.body.seller_country,
         company: req.body.company,
+        // Purchase Info
+        seller_id: req.body.seller_id,
+        buy_price: parseFloat(req.body.buy_price) || 0,
+        buy_date: req.body.buy_date,
+        payment_due_date: req.body.payment_due_date,
+        payment_status: req.body.payment_status || 'unpaid',
+        paid_amount: parseFloat(req.body.paid_amount) || 0, // Usually 0 on creation unless paid immediately logic elsewhere
+
         created_by: req.userId // Assign Creator from Token
     };
 
@@ -211,7 +258,7 @@ exports.create = async (req, res) => {
 };
 
 exports.findAll = (req, res) => {
-    const { certificate, shape, clarity, color, company } = req.query;
+    const { certificate, shape, clarity, color, company, seller_id } = req.query;
     console.log(`Fetch All Diamonds | User: ${req.userId} | Role: ${req.userRole} | Query:`, req.query);
 
     var condition = {};
@@ -221,6 +268,7 @@ exports.findAll = (req, res) => {
     if (clarity) condition.clarity = { [Op.like]: `%${clarity}%` };
     if (color) condition.color = { [Op.like]: `%${color}%` };
     if (company) condition.company = { [Op.like]: `%${company}%` };
+    if (seller_id) condition.seller_id = seller_id;
 
     // Default: Only show In Stock items (hide sold and in_cart)
     // User requested: "remove from inventory because that diamond can not sale to other"
@@ -254,6 +302,11 @@ exports.findAll = (req, res) => {
                 model: db.admins,
                 as: 'creator',
                 attributes: ['name', 'staff_id']
+            },
+            {
+                model: db.sellers,
+                as: 'seller',
+                attributes: ['name', 'address', 'company']
             }
         ],
         order: [['createdAt', 'DESC']]
@@ -314,6 +367,14 @@ exports.update = async (req, res) => {
     if (updateData.report_url) updateData.report_url = updateData.report_url;
     if (updateData.seller_country) updateData.seller_country = updateData.seller_country;
     if (updateData.company) updateData.company = updateData.company;
+
+    // Purchase Info Updates
+    if (updateData.seller_id !== undefined) updateData.seller_id = updateData.seller_id;
+    if (updateData.buy_price !== undefined) updateData.buy_price = parseFloat(updateData.buy_price) || 0;
+    if (updateData.buy_date !== undefined) updateData.buy_date = updateData.buy_date;
+    if (updateData.payment_due_date !== undefined) updateData.payment_due_date = updateData.payment_due_date;
+    if (updateData.payment_status !== undefined) updateData.payment_status = updateData.payment_status;
+    // paid_amount is usually updated via Payment Controller, but allow manual override if needed logic permits
 
     // Force Color Code Calculation or Parsing
     if (updateData.color) {
@@ -1010,9 +1071,19 @@ exports.bulkCreate = async (req, res) => {
             validate: true
         });
 
+        const skippedCertificates = Array.from(existingCerts);
+        const skippedCount = diamonds.length - result.length;
+
+        // Structured Response
         res.send({
-            message: `Successfully processed import batch.`,
-            details: `Imported: ${result.length}. Skipped (Duplicates): ${diamonds.length - result.length}.`
+            success: true,
+            importedCount: result.length,
+            skippedCount: skippedCount,
+            skippedCertificates: skippedCount > 0 ? skippedCertificates : [],
+            message: `Processed ${diamonds.length} records. Imported: ${result.length}. Skipped: ${skippedCount}.`,
+            details: skippedCount > 0
+                ? `Skipped ${skippedCount} duplicate(s).`
+                : "All items imported successfully."
         });
 
     } catch (err) {

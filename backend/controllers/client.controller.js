@@ -5,9 +5,9 @@ const Op = db.Sequelize.Op;
 // Create and Save a new Client
 exports.create = (req, res) => {
     // Validate request
-    if (!req.body.name || !req.body.contact_number) {
+    if (!req.body.name) {
         res.status(400).send({
-            message: "Content can not be empty! Name and Contact Number are required."
+            message: "Content can not be empty! Name is required."
         });
         return;
     }

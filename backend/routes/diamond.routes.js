@@ -20,6 +20,9 @@ module.exports = function (app) {
     // Fetch External
     router.get("/fetch/:certNo", [verifyToken], controller.fetchExternal);
 
+    // Check Status (Sold/In Stock)
+    router.get("/check-status/:certificate", [verifyToken], controller.checkStatus);
+
     // Inventory Summary (Must be before dynamic :id routes or root retrieval if specific path needed)
     router.get("/summary", [verifyToken], controller.getSummary);
 

@@ -7,6 +7,8 @@ import Invoices from './pages/Invoices';
 import InvoiceForm from './pages/InvoiceForm';
 import SalesHistory from './pages/SalesHistory';
 import StaffManagement from './pages/StaffManagement';
+import SellerList from './pages/SellerList';
+import SellerDetails from './pages/SellerDetails';
 
 import InvoicePrint from './components/InvoicePrint';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -62,6 +64,22 @@ const App = () => {
               <ProtectedRoute>
                 <MainLayout>
                   <SalesHistory />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/sellers" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <SellerList />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/sellers/:id" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <SellerDetails />
                 </MainLayout>
               </ProtectedRoute>
             } />

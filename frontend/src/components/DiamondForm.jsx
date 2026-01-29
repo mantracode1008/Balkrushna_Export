@@ -8,6 +8,7 @@ import {
 import { SHAPE_MASTER, SHAPE_OPTIONS, getDisplayShape } from '../utils/shapeUtils';
 import ClientSelect from './ClientSelect';
 import CompanySelect from './CompanySelect';
+import SellerSelect from './SellerSelect';
 import LocationSelect from './LocationSelect';
 import ClientForm from './ClientForm';
 import invoiceService from '../services/invoice.service';
@@ -125,12 +126,21 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
         sale_price: '',
         commission: '',
         company: '',
-        measurements: ''
+        sale_price: '',
+        commission: '',
+        company: '',
+        measurements: '',
+        // Purchase Info
+        seller_id: '',
+        buy_price: '',
+        buy_date: '',
+        payment_due_date: ''
     });
 
     const [loading, setLoading] = useState(false);
     const [fetchLoading, setFetchLoading] = useState(false);
     const [pricePerCarat, setPricePerCarat] = useState('');
+    const [dueDays, setDueDays] = useState(''); // New state for due days
     const [buyers, setBuyers] = useState([]);
     const [saleType, setSaleType] = useState('STOCK');
     const [clientData, setClientData] = useState({});
@@ -138,6 +148,7 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
     const [exchangeRate, setExchangeRate] = useState('');
     const [commissionINR, setCommissionINR] = useState('');
     const [commissionUSD, setCommissionUSD] = useState('');
+    const [statusWarning, setStatusWarning] = useState(null); // { type: 'sold' | 'in_stock', message: string, diamond: obj }
 
     // --- EFFECTS ---
 
@@ -238,7 +249,28 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
     const handleFetch = async () => {
         if (!formData.certificate) return;
         setFetchLoading(true);
+        setStatusWarning(null); // Clear previous warnings
+
         try {
+            // Priority 1: Check Internal Status
+            const statusCheck = await diamondService.checkStatus(formData.certificate);
+            if (statusCheck.data && statusCheck.data.exists) {
+                const { status, diamond } = statusCheck.data;
+                if (status === 'sold') {
+                    setStatusWarning({
+                        type: 'sold',
+                        message: `This diamond (Cert: ${formData.certificate}) is already SOLD!`,
+                        diamond
+                    });
+                } else if (status === 'in_stock') {
+                    setStatusWarning({
+                        type: 'in_stock',
+                        message: `This diamond (Cert: ${formData.certificate}) is already IN STOCK!`,
+                        diamond
+                    });
+                }
+            }
+
             const response = await diamondService.fetchExternal(formData.certificate);
             if (response.data) {
                 const fetched = response.data;
@@ -289,6 +321,25 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
                 commission_usd: parseFloat(commissionUSD) || 0,
                 commission_inr: parseFloat(commissionINR) || 0,
             };
+
+            // 1. Auto-set Buy Price from Calculated Value (Rap Total - Discount)
+            const basePrice = parseFloat(formData.price) || 0;
+            const disc = parseFloat(formData.discount) || 0;
+            const finalBuyPrice = basePrice * (1 - disc / 100);
+            payload.buy_price = parseFloat(finalBuyPrice.toFixed(2));
+
+            // 2. Auto-set Dates
+            if (payload.seller_id) {
+                const today = new Date();
+                payload.buy_date = today.toISOString().split('T')[0];
+
+                // Calculate Due Date from Days
+                if (dueDays) {
+                    const due = new Date(today);
+                    due.setDate(today.getDate() + parseInt(dueDays));
+                    payload.payment_due_date = due.toISOString().split('T')[0];
+                }
+            }
 
             if (initialData && initialData.id) {
                 await diamondService.update(initialData.id, payload);
@@ -394,9 +445,30 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
                                                 <span>FETCH</span>
                                             </button>
                                         </div>
+                                        {/* Status Warning UI */}
+                                        {statusWarning && (
+                                            <div className={`mt-3 px-4 py-3 rounded-xl border-l-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${statusWarning.type === 'sold'
+                                                ? 'bg-rose-50 border-rose-500 text-rose-700'
+                                                : 'bg-orange-50 border-orange-500 text-orange-700'
+                                                }`}>
+                                                <div className={`p-1.5 rounded-full ${statusWarning.type === 'sold' ? 'bg-rose-100' : 'bg-orange-100'}`}>
+                                                    {statusWarning.type === 'sold'
+                                                        ? <X size={14} className="text-rose-600" strokeWidth={3} />
+                                                        : <Info size={14} className="text-orange-600" strokeWidth={3} />
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-sm uppercase tracking-wide">{statusWarning.message}</p>
+                                                    {statusWarning.diamond && (
+                                                        <p className="text-xs font-semibold opacity-80 mt-0.5">
+                                                            {statusWarning.diamond.shape} • {statusWarning.diamond.carat}ct • {statusWarning.diamond.color}/{statusWarning.diamond.clarity} • Loc: {statusWarning.diamond.seller_country || 'N/A'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-6 md:col-span-2">
-                                        <LocationSelect label="Seller Origin" value={formData.buyer_country} onChange={handleChange} placeholder="e.g. India / UAE" />
+                                    <div className="md:col-span-2">
                                         <CompanySelect value={formData.company} onChange={handleChange} />
                                     </div>
                                     <Select label="Shape" name="shape" options={SHAPE_OPTIONS} value={getDisplayShape(formData.shape)} onChange={(e) => setFormData(prev => ({ ...prev, shape: e.target.value }))} required />
@@ -501,6 +573,28 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Section 4: Purchase Info (Admin Only) - Moved here */}
+                            <Card title="Purchase Details (Internal)" icon={Building2} className="border-l-4 border-l-blue-500">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="col-span-2">
+                                        <SellerSelect value={formData.seller_id} onChange={handleChange} />
+                                    </div>
+                                    <Input
+                                        label="Payment Terms (Days)"
+                                        type="number"
+                                        placeholder="e.g. 7"
+                                        value={dueDays}
+                                        onChange={(e) => setDueDays(e.target.value)}
+                                    />
+                                    {/* Calculated Due Date Preview (Optional) */}
+                                    {dueDays && (
+                                        <div className="text-[10px] font-bold text-indigo-500 mt-2 flex items-center gap-1">
+                                            Due: {new Date(new Date().setDate(new Date().getDate() + parseInt(dueDays))).toLocaleDateString()}
+                                        </div>
+                                    )}
+                                </div>
+                            </Card>
 
 
 

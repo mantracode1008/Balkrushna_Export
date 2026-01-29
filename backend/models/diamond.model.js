@@ -166,6 +166,28 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.ENUM('STOCK', 'ORDER'),
             defaultValue: 'STOCK'
         },
+        // Purchase / Seller Info
+        seller_id: {
+            type: Sequelize.INTEGER,
+            allowNull: true
+        },
+        buy_price: {
+            type: Sequelize.DECIMAL(10, 2)
+        },
+        buy_date: {
+            type: Sequelize.DATEONLY
+        },
+        payment_due_date: {
+            type: Sequelize.DATEONLY
+        },
+        paid_amount: {
+            type: Sequelize.DECIMAL(10, 2),
+            defaultValue: 0.00
+        },
+        payment_status: {
+            type: Sequelize.ENUM('unpaid', 'partially_paid', 'paid'),
+            defaultValue: 'unpaid'
+        },
         client_id: {
             type: Sequelize.INTEGER,
             allowNull: true

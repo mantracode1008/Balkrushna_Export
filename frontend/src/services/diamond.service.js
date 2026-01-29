@@ -61,6 +61,7 @@ const DiamondService = {
     create,
     update,
     remove,
+    checkStatus: (certNo) => api.get(`/diamonds/check-status/${certNo}`),
     bulkDelete,
     getBuyers: () => api.get("/diamonds/buyers"),
     getCompanies: () => api.get("/companies"),

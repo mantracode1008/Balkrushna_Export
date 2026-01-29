@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import diamondService from '../services/diamond.service';
 import XLSX from 'xlsx-js-style';
-import { Plus, Upload, Search, Trash2, Edit2, ShoppingCart, X, CheckCircle, Filter, ChevronDown, Download, RefreshCw, LayoutGrid, List, DollarSign } from 'lucide-react';
+import { Plus, Upload, Search, Trash2, Edit2, ShoppingCart, X, CheckCircle, Filter, ChevronDown, Download, RefreshCw, LayoutGrid, List, DollarSign, XCircle } from 'lucide-react';
 import DiamondForm from '../components/DiamondForm';
 import CSVUpload from '../components/CSVUpload';
 import SalesModal from '../components/SalesModal';
+import FilterDropdown from '../components/FilterDropdown';
 // import { useCart } from '../context/CartContext';
 import { getShapeDisplay } from '../utils/shapeUtils';
 
@@ -71,8 +72,20 @@ const Inventory = () => {
     const fetchCompanies = async () => {
         try {
             const res = await diamondService.getCompanies();
+            // Ensure companies is list of names if API returns objects?
+            // Based on existing code, expected straightforward array or names.
             setCompanies(res.data || []);
         } catch (err) { console.error(err); }
+    };
+
+    const clearAllFilters = () => {
+        setSearch('');
+        setStatusFilter('in_stock');
+        setShapeFilter('');
+        setClarityFilter('');
+        setColorFilter('');
+        setCompanyFilter('');
+        if (isAdmin) setSelectedStaffId('');
     };
 
     const fetchDiamonds = async () => {
@@ -382,24 +395,33 @@ const Inventory = () => {
                         <div className="h-8 w-px bg-slate-200 mx-1 hidden sm:block"></div>
 
                         {/* Dropdown Filters */}
+                        {/* Dropdown Filters with Custom UI */}
                         {[
                             { value: shapeFilter, setter: setShapeFilter, options: ['Round', 'Princess', 'Emerald', 'Asscher', 'Marquise', 'Oval', 'Radiant', 'Pear', 'Heart', 'Cushion'], placeholder: 'Shape' },
                             { value: colorFilter, setter: setColorFilter, options: ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'], placeholder: 'Color' },
                             { value: clarityFilter, setter: setClarityFilter, options: ['IF', 'VVS 1', 'VVS 2', 'VS 1', 'VS 2', 'SI 1', 'SI 2', 'I 1', 'I 2', 'I 3'], placeholder: 'Clarity' },
                             { value: companyFilter, setter: setCompanyFilter, options: companies, placeholder: 'Company' }
                         ].map((filter, idx) => (
-                            <div key={idx} className="relative">
-                                <select
-                                    value={filter.value}
-                                    onChange={(e) => filter.setter(e.target.value)}
-                                    className="appearance-none pl-3 pr-8 py-2.5 bg-white border border-slate-200 hover:border-slate-300 rounded-lg text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-sm transition-all min-w-[100px]"
-                                >
-                                    <option value="">{filter.placeholder}</option>
-                                    {filter.options.map(o => <option key={o} value={o}>{o}</option>)}
-                                </select>
-                                <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                            </div>
+                            <FilterDropdown
+                                key={idx}
+                                value={filter.value}
+                                onChange={filter.setter}
+                                options={filter.options}
+                                placeholder={filter.placeholder}
+                            />
                         ))}
+
+                        {/* Clear Filters Button */}
+                        {(shapeFilter || colorFilter || clarityFilter || companyFilter || search || statusFilter !== 'in_stock' || (isAdmin && selectedStaffId)) && (
+                            <button
+                                onClick={clearAllFilters}
+                                className="flex items-center gap-1.5 px-4 py-2.5 bg-white text-rose-500 rounded-xl text-xs font-bold border border-rose-100 hover:bg-rose-50 hover:border-rose-200 transition-all shadow-sm"
+                                title="Clear All Filters"
+                            >
+                                <XCircle size={14} />
+                                Clear
+                            </button>
+                        )}
 
                         {/* Admin specific staff dropdown if needed, otherwise hidden in simplified view or integrated above */}
                         {isAdmin && (
@@ -566,7 +588,7 @@ const Inventory = () => {
                                                         {profit > 0 ? `$${profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
                                                     </td>
                                                     <td className="px-2 py-2 text-center text-xs text-slate-500">{d.buyer_country || '-'}</td>
-                                                    <td className="px-2 py-2 text-center text-xs text-slate-500">{d.seller_country || '-'}</td>
+                                                    <td className="px-2 py-2 text-center text-xs text-slate-500">{d.seller?.address || d.seller_country || '-'}</td>
                                                     <td className="px-4 py-2 text-right">
                                                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <button onClick={(e) => { e.stopPropagation(); handleEdit(d); }} className="p-1.5 text-slate-500  hover:text-indigo-600  hover:bg-indigo-50  rounded-md transition-colors" title="Edit">

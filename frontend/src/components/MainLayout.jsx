@@ -4,9 +4,10 @@ import authService from '../services/auth.service';
 
 const MainLayout = ({ children }) => {
     const user = authService.getCurrentUser();
-    const displayName = user ? user.name : 'Guest';
+    const displayName = (user && user.name) ? user.name : 'Guest';
     const displayRole = user ? (user.role === 'admin' ? 'Administrator' : 'Staff Member') : 'Guest';
-    const initial = user ? user.name.charAt(0).toUpperCase() : '?';
+    const initial = (user && user.name) ? user.name.charAt(0).toUpperCase() : '?';
+
 
     return (
         <div className="flex min-h-screen bg-[#F8FAFC] font-sans transition-colors duration-300 relative">

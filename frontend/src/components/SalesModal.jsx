@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, CheckCircle, Calculator, User, DollarSign, Building2 } from 'lucide-react';
 import ClientSelect from './ClientSelect';
 import ClientForm from './ClientForm';
 import api from '../services/api';
 import diamondService from '../services/diamond.service';
+import clientService from '../services/client.service';
+import { X, CheckCircle, Calculator, User, DollarSign, Building2, Pencil, Trash2, Save, ChevronDown } from 'lucide-react';
 
 const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
     const [step, setStep] = useState(1); // 1: Client, 2: Financials
@@ -14,6 +15,13 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
     const [selectedClientName, setSelectedClientName] = useState('');
     const [existingClients, setExistingClients] = useState([]);
     const [newClientData, setNewClientData] = useState({});
+
+    // Edit Mode State
+    const [isEditingClient, setIsEditingClient] = useState(false);
+    const [editClientData, setEditClientData] = useState({});
+
+    // Custom Dropdown State
+    const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
     // Data Step 2
     const [financials, setFinancials] = useState({
@@ -128,10 +136,59 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
         }
     }, [selectedClientName, clientMode, existingClients]);
 
+
+    // Handlers for Edit/Delete
+    const handleEditClick = () => {
+        const client = existingClients.find(c => c.name === selectedClientName);
+        if (!client) return;
+        setEditClientData(client);
+        setIsEditingClient(true);
+    };
+
+    const handleSaveClientEdit = async () => {
+        if (!editClientData.name) return alert("Name is required");
+        setLoading(true);
+        try {
+            await clientService.update(editClientData.id, editClientData);
+
+            // Update Local State
+            setExistingClients(prev => prev.map(c => c.id === editClientData.id ? editClientData : c));
+            setSelectedClientName(editClientData.name); // Keep selected if name changed
+            setIsEditingClient(false);
+            alert("Client updated successfully!");
+        } catch (err) {
+            console.error("Update Client Error:", err);
+            alert("Failed to update client.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteClient = async () => {
+        const client = existingClients.find(c => c.name === selectedClientName);
+        if (!client) return;
+
+        if (!window.confirm(`Are you sure you want to delete ${client.name}? This cannot be undone.`)) return;
+
+        setLoading(true);
+        try {
+            await clientService.remove(client.id);
+            setExistingClients(prev => prev.filter(c => c.id !== client.id));
+            setSelectedClientName(''); // Clear selection
+            alert("Client deleted successfully!");
+        } catch (err) {
+            console.error("Delete Client Error:", err);
+            alert("Failed to delete client. It might be linked to existing invoices.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleNext = () => {
         if (step === 1) {
             if (clientMode === 'EXISTING' && !selectedClientName) return alert("Please select a client.");
-            if (clientMode === 'NEW' && (!newClientData.name || !newClientData.contact_number)) return alert("Please fill client details (Name & Contact Number).");
+            if (clientMode === 'EXISTING' && !selectedClientName) return alert("Please select a client.");
+            if (clientMode === 'NEW' && !newClientData.name) return alert("Please fill client details (Name is required).");
             setStep(2);
         } else {
             handleSubmit();
@@ -243,15 +300,101 @@ const SalesModal = ({ selectedDiamonds, onClose, onSuccess }) => {
 
                             {clientMode === 'EXISTING' ? (
                                 <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm min-h-[200px]">
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Search Client</label>
-                                    <select
-                                        value={selectedClientName}
-                                        onChange={(e) => setSelectedClientName(e.target.value)}
-                                        className="w-full px-4 py-3 text-sm font-bold border border-slate-200 rounded-xl bg-slate-50"
-                                    >
-                                        <option value="">Select a Client...</option>
-                                        {existingClients.map(c => <option key={c.id} value={c.name}>{c.name} ({c.company_name})</option>)}
-                                    </select>
+                                    {!isEditingClient ? (
+                                        <>
+                                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Search Client</label>
+                                            <div className="flex gap-2 relative">
+                                                {/* Custom Dropdown Trigger */}
+                                                <div
+                                                    onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
+                                                    className="flex-1 px-4 py-3 text-sm font-bold border border-slate-200 rounded-xl bg-white cursor-pointer flex justify-between items-center hover:border-indigo-300 transition-colors shadow-sm text-slate-700"
+                                                >
+                                                    <span className={!selectedClientName ? "text-slate-400 font-normal" : ""}>
+                                                        {selectedClientName || "Select a Client..."}
+                                                    </span>
+                                                    <ChevronDown size={16} className={`text-slate-400 transition-transform ${isClientDropdownOpen ? 'rotate-180' : ''}`} />
+                                                </div>
+
+                                                {/* Dropdown Menu */}
+                                                {isClientDropdownOpen && (
+                                                    <div className="absolute top-full left-0 w-[calc(100%-80px)] mt-2 bg-white border border-slate-100 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-200 p-1">
+                                                        {existingClients.map(c => {
+                                                            const displayLocation = c.country ? `(${c.country})` : '';
+                                                            const displayCompany = c.company_name ? ` - ${c.company_name}` : '';
+                                                            const displayName = `${c.name} ${displayLocation}${displayCompany}`;
+                                                            const isSelected = c.name === selectedClientName;
+
+                                                            return (
+                                                                <div
+                                                                    key={c.id}
+                                                                    onClick={() => {
+                                                                        setSelectedClientName(c.name);
+                                                                        setIsClientDropdownOpen(false);
+                                                                    }}
+                                                                    className={`px-4 py-2.5 rounded-lg text-sm font-bold cursor-pointer transition-colors flex items-center justify-between ${isSelected ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}
+                                                                >
+                                                                    <span>
+                                                                        {c.name}
+                                                                        <span className="text-slate-400 font-normal ml-1">{displayLocation}</span>
+                                                                        <span className="text-slate-400 font-medium ml-1 text-xs">{displayCompany}</span>
+                                                                    </span>
+                                                                    {isSelected && <CheckCircle size={14} className="text-indigo-600" />}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {existingClients.length === 0 && (
+                                                            <div className="px-4 py-3 text-sm text-slate-400 text-center italic">No clients found.</div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {selectedClientName && (
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={handleEditClick}
+                                                            className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200"
+                                                            title="Edit Client"
+                                                        >
+                                                            <Pencil size={18} strokeWidth={2.5} />
+                                                        </button>
+                                                        <button
+                                                            onClick={handleDeleteClient}
+                                                            className="p-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors border border-red-200"
+                                                            title="Delete Client"
+                                                        >
+                                                            <Trash2 size={18} strokeWidth={2.5} />
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <div className="animate-in fade-in zoom-in-95 duration-200">
+                                            <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-2">
+                                                <h3 className="font-bold text-slate-800">Edit Client Details</h3>
+                                                <button onClick={() => setIsEditingClient(false)} className="text-slate-400 hover:text-slate-600">
+                                                    <X size={20} />
+                                                </button>
+                                            </div>
+                                            <ClientForm value={editClientData} onChange={setEditClientData} />
+                                            <div className="flex justify-end gap-3 mt-4">
+                                                <button
+                                                    onClick={() => setIsEditingClient(false)}
+                                                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    onClick={handleSaveClientEdit}
+                                                    disabled={loading}
+                                                    className="px-6 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 shadow-md flex items-center gap-2"
+                                                >
+                                                    <Save size={14} />
+                                                    Save Changes
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <ClientForm value={newClientData} onChange={setNewClientData} />
