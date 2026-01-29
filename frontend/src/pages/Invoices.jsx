@@ -94,45 +94,41 @@ const Invoices = () => {
     // --- STATS CALCULATION ---
     const stats = useMemo(() => {
         const data = filteredInvoices;
-
         const count = data.length;
-        // Total Sales (Contracted Amount)
-        const totalSalesUSD = data.reduce((sum, inv) => sum + parseFloat(inv.total_amount || 0), 0);
-        // Fallback for INR if missing (approx 85)
-        const totalSalesINR = data.reduce((sum, inv) => {
-            const inr = parseFloat(inv.final_amount_inr);
-            return sum + (inr > 0 ? inr : (parseFloat(inv.total_amount || 0) * 85));
-        }, 0);
 
-        // Dynamic Amounts based on Status
-        // Dynamic Amounts based on Status (Normalized)
-        const receivedAmountINR = data.reduce((sum, inv) => {
+        let totalUSD = 0, totalINR = 0;
+        let receivedUSD = 0, receivedINR = 0;
+        let pendingUSD = 0, pendingINR = 0;
+
+        data.forEach(inv => {
+            // Determine currency - assume USD if not specified
+            const isINR = inv.currency === 'INR';
+
+            // Amounts
+            // Use grand_total if available, otherwise total_amount
+            // Note: DB typically stores 'total_amount' as the base amount. 
+            // 'grand_total' might be the calculated total. 
+            // In the `loadInvoices` or API, we might need to be careful.
+            // Using logic from `handleStatusUpdate` -> `baseTotal` is `total_amount`.
+            // Let's rely on standard fields.
+            const amount = parseFloat(inv.grand_total || inv.total_amount || 0);
             const paid = parseFloat(inv.paid_amount || 0);
-            const rate = parseFloat(inv.exchange_rate || 85);
-            return sum + (inv.currency === 'INR' ? paid : paid * rate);
-        }, 0);
-
-        const receivedAmountUSD = data.reduce((sum, inv) => {
-            const paid = parseFloat(inv.paid_amount || 0);
-            const rate = parseFloat(inv.exchange_rate || 85);
-            return sum + (inv.currency === 'USD' ? paid : paid / rate);
-        }, 0);
-
-        const pendingAmountINR = data.reduce((sum, inv) => {
             const due = parseFloat(inv.balance_due || 0);
-            const rate = parseFloat(inv.exchange_rate || 85);
-            return sum + (inv.currency === 'INR' ? due : due * rate);
-        }, 0);
 
-        const pendingAmountUSD = data.reduce((sum, inv) => {
-            const due = parseFloat(inv.balance_due || 0);
-            const rate = parseFloat(inv.exchange_rate || 85);
-            return sum + (inv.currency === 'USD' ? due : due / rate);
-        }, 0);
+            if (isINR) {
+                totalINR += amount;
+                receivedINR += paid;
+                pendingINR += due;
+            } else {
+                totalUSD += amount;
+                receivedUSD += paid;
+                pendingUSD += due;
+            }
+        });
 
         const pendingCount = data.filter(inv => ['Pending', 'Partial', 'Due', 'Overdue'].includes(inv.payment_status)).length;
 
-        return { count, totalSalesUSD, totalSalesINR, receivedAmountINR, receivedAmountUSD, pendingAmountINR, pendingAmountUSD, pendingCount };
+        return { count, totalUSD, totalINR, receivedUSD, receivedINR, pendingUSD, pendingINR, pendingCount };
     }, [filteredInvoices]);
 
     // --- ACTIONS ---
@@ -174,6 +170,7 @@ const Invoices = () => {
                     const updatedInv = {
                         ...inv,
                         payment_status: newStatus,
+                        payment_date: ['Paid', 'Partial'].includes(newStatus) ? new Date() : null,
                         paid_amount: newPaid,
                         balance_due: newBalance
                     };
@@ -297,25 +294,40 @@ const Invoices = () => {
                 />
                 <StatCard
                     title="Total Sales"
-                    value={`₹${stats.totalSalesINR.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                    value={
+                        <div className="flex flex-col leading-tight">
+                            <span>${stats.totalUSD.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                            <span className="text-sm font-medium text-slate-500">₹{stats.totalINR.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                        </div>
+                    }
                     icon={DollarSign}
                     color="indigo"
-                    subtext={`$${stats.totalSalesUSD.toLocaleString()}`}
+                // subtext={`$${stats.totalSalesUSD.toLocaleString()}`}
                 />
                 <StatCard
                     title="Received Amount"
-                    value={`₹${stats.receivedAmountINR.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                    value={
+                        <div className="flex flex-col leading-tight">
+                            <span>${stats.receivedUSD.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                            <span className="text-sm font-medium text-emerald-600">₹{stats.receivedINR.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                        </div>
+                    }
                     icon={CheckCircle}
                     color="emerald"
-                    subtext={`$${stats.receivedAmountUSD.toLocaleString()}`}
+                    // subtext={`$${stats.receivedAmountUSD.toLocaleString()}`}
                     highlight
                 />
                 <StatCard
                     title="Pending Amount"
-                    value={`₹${stats.pendingAmountINR.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
+                    value={
+                        <div className="flex flex-col leading-tight">
+                            <span>${stats.pendingUSD.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                            <span className="text-sm font-medium text-rose-600">₹{stats.pendingINR.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+                        </div>
+                    }
                     icon={AlertCircle}
                     color="rose"
-                    subtext={`$${stats.pendingAmountUSD.toLocaleString()}`}
+                    // subtext={`$${stats.pendingAmountUSD.toLocaleString()}`}
                     warning
                 />
             </div>
@@ -391,6 +403,7 @@ const Invoices = () => {
                                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Amount</th>
                                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Pending</th>
                                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Profit</th>
+                                <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Payment Date</th>
                                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Due Date</th>
                                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Status</th>
                                 <th className="p-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
@@ -435,7 +448,12 @@ const Invoices = () => {
                                             </td>
                                             <td className="p-4 font-bold text-emerald-600">+${parseFloat(inv.total_profit).toLocaleString()}</td>
                                             <td className="p-4">
-                                                <div className="text-sm text-slate-600">{inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</div>
+                                                <div className="text-sm text-slate-600">{inv.payment_date ? new Date(inv.payment_date).toLocaleDateString() : '-'}</div>
+                                            </td>
+                                            <td className="p-4">
+                                                <div className={`text-sm ${inv.payment_status === 'Paid' ? 'text-emerald-600 font-bold' : 'text-slate-600'}`}>
+                                                    {inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}
+                                                </div>
                                                 {daysRemaining !== null && balanceDue > 0 && (
                                                     <div className={`text-xs font-bold ${daysRemaining < 0 ? 'text-rose-500' : 'text-slate-400'}`}>
                                                         {daysRemaining < 0 ? `${Math.abs(daysRemaining)} days overdue` : `${daysRemaining} days left`}

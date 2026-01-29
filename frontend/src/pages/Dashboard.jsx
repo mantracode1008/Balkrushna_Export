@@ -53,19 +53,12 @@ const Dashboard = () => {
                 labels,
                 datasets: [
                     {
-                        label: 'Net Profit ($)',
-                        data: profits,
-                        backgroundColor: '#10B981', // Emerald
-                        borderRadius: 6,
-                        barPercentage: 0.6,
-                    },
-                    {
                         label: 'Total Expense ($)',
                         data: expenses,
                         backgroundColor: '#6366F1', // Indigo
                         borderRadius: 6,
                         barPercentage: 0.6,
-                        hidden: true // Hidden by default, toggleable
+                        // hidden: true <-- Removed hidden: true
                     }
                 ]
             });
@@ -211,10 +204,10 @@ const Dashboard = () => {
                         <div>
                             <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
                                 <BarChart3 className="w-5 h-5 text-indigo-500" />
-                                {isAdmin ? "Profit Performance by Staff" : "My Performance"}
+                                {isAdmin ? "Expense Overview by Staff" : "My Expenses"}
                             </h3>
                             <p className="text-sm text-slate-400">
-                                {isAdmin ? "Net profit generated per staff member" : "Your net profit analysis"}
+                                {isAdmin ? "Total expenses per staff member" : "Your expense analysis"}
                             </p>
                         </div>
                         <select className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 font-medium text-slate-600 outline-none">

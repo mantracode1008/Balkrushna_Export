@@ -134,31 +134,44 @@ exports.generateInvoicePDF = (invoice, items, res) => {
         // --- Table Header ---
         // Adjust tableTop based on client box height
         const tableTop = client ? 280 : 250;
-        // Columns: No, Desc, Cert, Shape, Color, Clarity, BasePrice, Disc, Net
-        // X Positions
+        // Columns: No, Desc, Cert, Shape, Color, Clarity, Cut, Pol, Sym, DP%, Tab%, BasePrice, Disc, Net
+        // Adjusted X Positions
         const xNo = 40;
-        const xDesc = 70;
-        const xCert = 180;
-        const xShape = 240;
-        const xColor = 280;
-        const xClarity = 310;
-        const xBase = 350;
-        const xDisc = 410;
-        const xNet = 470;
+        const xDesc = 65;
+        const xCert = 150;
+        const xShape = 210;
+        const xColor = 250;
+        const xClarity = 275;
+
+        const xPol = 300;
+        const xSym = 330; // More space
+        // const xDepth = 340; // Removed
+        const xDpPct = 365; // Depth %
+        const xTabPct = 400; // Table %
+
+        const xBase = 430;
+        const xDisc = 475;
+        const xNet = 515;
 
         const drawTableHeader = (y) => {
             doc.rect(40, y, 515, 25).fill(primaryColor);
-            doc.fillColor('white').font('Helvetica-Bold').fontSize(8);
+            doc.fillColor('white').font('Helvetica-Bold').fontSize(7);
 
             doc.text('#', xNo + 2, y + 8);
-            doc.text('DESCRIPTION', xDesc, y + 8);
-            doc.text('CERT NO', xCert, y + 8);
+            doc.text('DESC', xDesc, y + 8);
+            doc.text('CERT', xCert, y + 8);
             doc.text('SHP', xShape, y + 8);
             doc.text('COL', xColor, y + 8);
             doc.text('CLR', xClarity, y + 8);
-            doc.text('BASE ($)', xBase, y + 8, { width: 50, align: 'right' });
-            doc.text('DISC %', xDisc, y + 8, { width: 40, align: 'right' });
-            doc.text('NET ($)', xNet, y + 8, { width: 60, align: 'right' });
+            // doc.text('CUT', xCut, y + 8); 
+            // doc.text('POL', xPol, y + 8);
+            doc.text('Sym', xSym, y + 8); // Renamed SYM -> Sym
+            // doc.text('DEP', xDepth, y + 8); // Removed
+            doc.text('DP%', xDpPct, y + 8);
+            doc.text('TAB%', xTabPct, y + 8);
+            doc.text('BASE($)', xBase, y + 8, { width: 45, align: 'right' });
+            doc.text('DIS%', xDisc, y + 8, { width: 30, align: 'right' });
+            doc.text('NET($)', xNet, y + 8, { width: 40, align: 'right' });
         };
 
         drawTableHeader(tableTop);
@@ -167,7 +180,7 @@ exports.generateInvoicePDF = (invoice, items, res) => {
         let y = tableTop + 30;
         let totalBase = 0;
 
-        doc.fillColor('black').font('Helvetica').fontSize(9);
+        doc.fillColor('black').font('Helvetica').fontSize(8); // Reduced row font size
 
         items.forEach((item, i) => {
             const d = item.diamond;
@@ -175,7 +188,6 @@ exports.generateInvoicePDF = (invoice, items, res) => {
 
             // Calculations
             // item.sale_price is final "Net Price" (Total)
-            // We need to reverse calc Base for display if not present
             const netPrice = parseFloat(item.sale_price);
 
             const disc = parseFloat(d.discount) || 0;
@@ -191,15 +203,22 @@ exports.generateInvoicePDF = (invoice, items, res) => {
 
             doc.fillColor('black');
             doc.text(i + 1, xNo + 2, y);
-            doc.text(`${d.carat}ct Diamond`, xDesc, y);
+            doc.text(`${d.carat}ct`, xDesc, y);
             doc.font('Helvetica-Bold').text(d.certificate, xCert, y);
-            doc.font('Helvetica').text(d.shape, xShape, y);
+            doc.font('Helvetica').text(d.shape.substring(0, 3), xShape, y); // Truncate shape
             doc.text(d.color, xColor, y);
             doc.text(d.clarity, xClarity, y);
+            // doc.text(d.cut || '-', xCut, y);
+            // doc.text(d.polish || '-', xPol, y);
+            doc.text(d.symmetry || '-', xSym, y);
+            // doc.text(d.pavilion_depth || '-', xDepth, y); // Removed
+            doc.text(d.total_depth_percent || '-', xDpPct, y);
+            doc.text(d.table_percent || '-', xTabPct, y);
 
-            doc.text(basePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), xBase, y, { width: 50, align: 'right' });
-            doc.text(`${disc.toFixed(2)}%`, xDisc, y, { width: 40, align: 'right' });
-            doc.font('Helvetica-Bold').text(netPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), xNet, y, { width: 60, align: 'right' });
+
+            doc.text(basePrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), xBase, y, { width: 45, align: 'right' });
+            doc.text(`${disc.toFixed(1)}`, xDisc, y, { width: 30, align: 'right' }); // 1 decimal for space
+            doc.font('Helvetica-Bold').text(netPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), xNet, y, { width: 45, align: 'right' });
 
             y += 20;
 
@@ -209,7 +228,7 @@ exports.generateInvoicePDF = (invoice, items, res) => {
                 y = 50;
                 drawTableHeader(y);
                 y += 30; // Space after header
-                doc.fillColor('black').font('Helvetica').fontSize(9);
+                doc.fillColor('black').font('Helvetica').fontSize(8);
             }
         });
 

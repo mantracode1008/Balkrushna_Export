@@ -241,12 +241,10 @@ exports.findAll = (req, res) => {
             condition.created_by = req.query.staffId;
         }
     } else {
-        // Non-admins strictly see ONLY their own data
-        if (!req.userId) {
-            console.warn("Security Alert: Staff request missing User ID. Access Denied.");
-            return res.status(403).send({ message: "Access Denied. User verification failed." });
-        }
-        condition.created_by = req.userId;
+        condition[Op.or] = [
+            { created_by: req.userId },
+            { sold_by: req.userId }
+        ];
     }
 
     Diamond.findAll({

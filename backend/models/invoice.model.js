@@ -59,6 +59,10 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.DECIMAL(10, 2),
             defaultValue: 0
         },
+        payment_date: {
+            type: Sequelize.DATE,
+            allowNull: true
+        },
         balance_due: {
             type: Sequelize.DECIMAL(10, 2)
         },

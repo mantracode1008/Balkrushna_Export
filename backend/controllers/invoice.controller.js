@@ -239,6 +239,10 @@ exports.findAll = (req, res) => {
                 model: db.admins,
                 as: "creator",
                 attributes: ['name', 'role']
+            },
+            {
+                model: db.clients,
+                as: "client"
             }
         ],
         order: [['createdAt', 'DESC']]
@@ -511,6 +515,8 @@ exports.exportExcel = async (req, res) => {
                     "Cut": d ? d.cut : '',
                     "Polish": d ? d.polish : '',
                     "Sym": d ? d.symmetry : '',
+                    "Depth %": d ? d.total_depth_percent : '',
+                    "Table %": d ? d.table_percent : '',
 
                     // Financials
                     "Rate / Carat": item.rate_per_carat || (d && d.carat > 0 ? salePrice / d.carat : 0),
@@ -653,6 +659,21 @@ exports.updateStatus = async (req, res) => {
         }
         if (remarks !== undefined) updateData.remarks = remarks;
 
+        // Auto-update payment_date logic
+        if (payment_status) {
+            const activeStatuses = ['Paid', 'Partial'];
+            if (activeStatuses.includes(payment_status)) {
+                // Determine existing date or set new one
+                // If switching from Pending to Paid, set Now.
+                // If switching Paid to Partial, keep existing? No, typically last update.
+                // User requirement: "when i paid ... date changes"
+                // Assuming we update the date to Now when enabling Paid status.
+                updateData.payment_date = new Date();
+            } else {
+                updateData.payment_date = null; // Clear date if reverting to Pending/Overdue
+            }
+        }
+
         await invoice.update(updateData);
         res.send({ message: "Invoice status and financials updated successfully." });
 
@@ -706,10 +727,20 @@ exports.addPayment = async (req, res) => {
             note: note || ''
         });
 
+        // Determine Payment Date field update
+        let paymentDateUpdate = invoice.payment_date;
+        if (['Paid', 'Partial'].includes(newStatus)) {
+            // If previously not paid/partial, or just updating to latest payment
+            paymentDateUpdate = new Date();
+        } else {
+            paymentDateUpdate = null;
+        }
+
         await invoice.update({
             paid_amount: newPaidAmount,
             balance_due: newBalance,
             payment_status: newStatus,
+            payment_date: paymentDateUpdate, // <-- Added this
             payment_history: history
         }, { transaction: t });
 

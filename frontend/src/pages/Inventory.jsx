@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import diamondService from '../services/diamond.service';
+import XLSX from 'xlsx-js-style';
 import { Plus, Upload, Search, Trash2, Edit2, ShoppingCart, X, CheckCircle, Filter, ChevronDown, Download, RefreshCw, LayoutGrid, List, DollarSign } from 'lucide-react';
 import DiamondForm from '../components/DiamondForm';
 import CSVUpload from '../components/CSVUpload';
@@ -185,41 +186,85 @@ const Inventory = () => {
         const selectedData = diamonds.filter(d => selectedIds.includes(d.id));
         if (selectedData.length === 0) return;
 
-        // Custom CSV Mapping (Only Export User-Relevent Fields)
-        const headers = [
-            "Certificate", "Date", "Shape", "Carat", "Color", "Clarity",
-            "Cut", "Polish", "Symmetry", "Fluorescence", "Table %", "Depth %",
-            "Price", "Discount %", "Final Price"
-        ];
+        // Prepare Data for Excel (All Fields from Add Diamond Form)
+        const exportData = selectedData.map(d => {
+            // Calculations
+            const price = parseFloat(d.price) || 0;
+            const discount = parseFloat(d.discount) || 0;
+            const netPrice = price * (1 - discount / 100);
 
-        const rows = selectedData.map(d => [
-            d.certificate,
-            d.certificate_date ? new Date(d.certificate_date).toLocaleDateString('en-GB') : '-',
-            d.shape,
-            d.carat,
-            d.color,
-            d.clarity,
-            d.cut,
-            d.polish,
-            d.symmetry,
-            d.fluorescence,
-            d.table_percent,
-            d.total_depth_percent,
-            d.price,
-            d.discount || 0,
-            d.price ? (parseFloat(d.price) * (1 - (parseFloat(d.discount) || 0) / 100)).toFixed(2) : 0
-        ]);
+            return {
+                // 1. Identification
+                "Certificate": d.certificate,
+                "Certificate Date": d.certificate_date ? new Date(d.certificate_date).toLocaleDateString('en-GB') : '-',
+                "Lab": d.lab || '-',
+                "Company": d.company || '-',
+                "Status": d.status ? d.status.toUpperCase().replace('_', ' ') : '-',
 
-        const csvContent = "data:text/csv;charset=utf-8,"
-            + [headers.join(","), ...rows.map(e => e.map(String).map(s => `"${s.replace(/"/g, '""')}"`).join(","))].join("\n");
+                // 2. Specifications
+                "Shape": d.shape,
+                "Carat": parseFloat(d.carat) || 0,
+                "Color": d.color,
+                "Clarity": d.clarity,
+                "Cut": d.cut || '-',
+                "Polish": d.polish || '-',
+                "Symmetry": d.symmetry || '-',
+                "Fluorescence": d.fluorescence || '-',
 
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
+                // 3. Measurements & Ratios
+                "Measurements": d.measurements || '-',
+                "Table %": d.table_percent || '-',
+                "Depth %": d.total_depth_percent || '-',
+                "Crown Height": d.crown_height || '-',
+                "Pavillion Depth": d.pavilion_depth || '-',
+                "Girdle": d.girdle_thickness || '-',
+                "Culet": d.culet || '-',
+
+                // 4. Pricing
+                "Rap Price ($)": parseFloat(d.rap_price || (d.carat > 0 ? price / d.carat : 0)).toFixed(2),
+                "Total Rap ($)": price.toFixed(2),
+                "Discount %": discount.toFixed(2),
+                "Net Price ($)": netPrice.toFixed(2),
+                "Price/Ct ($)": (d.carat > 0 ? netPrice / d.carat : 0).toFixed(2),
+                "Currency": d.currency || 'USD',
+                "Ex Rate": d.exchange_rate || 1,
+
+                // 5. Inscriptions & Notes
+                "Inscription": d.inscription || '-',
+                "Comments": d.comments || '-'
+            };
+        });
+
+        // Create Workbook & Sheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(exportData);
+
+        // Styling
+        const headerStyle = {
+            font: { bold: true, color: { rgb: "FFFFFF" }, name: "Arial", sz: 10 },
+            fill: { fgColor: { rgb: "4F46E5" } }, // Indigo-600
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+                top: { style: "thin", color: { rgb: "000000" } },
+                bottom: { style: "thin", color: { rgb: "000000" } },
+                left: { style: "thin", color: { rgb: "000000" } },
+                right: { style: "thin", color: { rgb: "000000" } }
+            }
+        };
+
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let C = range.s.c; C <= range.e.c; ++C) {
+            const address = XLSX.utils.encode_col(C) + "1"; // Header Row
+            if (!ws[address]) continue;
+            ws[address].s = headerStyle;
+        }
+
+        // Auto-width
+        const wscols = Object.keys(exportData[0]).map(k => ({ wch: Math.max(k.length + 5, 12) }));
+        ws['!cols'] = wscols;
+
+        XLSX.utils.book_append_sheet(wb, ws, "Inventory Export");
+        XLSX.writeFile(wb, `Inventory_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
     // --- RENDER HELPERS ---
@@ -340,7 +385,7 @@ const Inventory = () => {
                         {[
                             { value: shapeFilter, setter: setShapeFilter, options: ['Round', 'Princess', 'Emerald', 'Asscher', 'Marquise', 'Oval', 'Radiant', 'Pear', 'Heart', 'Cushion'], placeholder: 'Shape' },
                             { value: colorFilter, setter: setColorFilter, options: ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'], placeholder: 'Color' },
-                            { value: clarityFilter, setter: setClarityFilter, options: ['IF', 'VVS1', 'VVS2', 'VS1', 'VS2', 'SI1', 'SI2', 'I1', 'I2', 'I3'], placeholder: 'Clarity' },
+                            { value: clarityFilter, setter: setClarityFilter, options: ['IF', 'VVS 1', 'VVS 2', 'VS 1', 'VS 2', 'SI 1', 'SI 2', 'I 1', 'I 2', 'I 3'], placeholder: 'Clarity' },
                             { value: companyFilter, setter: setCompanyFilter, options: companies, placeholder: 'Company' }
                         ].map((filter, idx) => (
                             <div key={idx} className="relative">
@@ -438,80 +483,106 @@ const Inventory = () => {
                         ) : diamonds.length === 0 ? (
                             <tr><td colSpan={isAdmin ? "20" : "19"} className="text-center py-20 text-slate-400">No diamonds matching your criteria.</td></tr>
                         ) : (
-                            diamonds.map((d) => {
-                                const costPrice = d.price ? (parseFloat(d.price) * (1 - (parseFloat(d.discount) || 0) / 100)) : 0;
-                                const salePrice = d.sale_price ? parseFloat(d.sale_price) : 0;
-                                const profit = salePrice > 0 ? (salePrice - costPrice) : 0;
+                            (() => {
+                                // Group diamonds by Staff Name
+                                const groupedDiamonds = diamonds.reduce((acc, d) => {
+                                    const staffName = d.creator ? d.creator.name : 'Super Admin';
+                                    if (!acc[staffName]) acc[staffName] = [];
+                                    acc[staffName].push(d);
+                                    return acc;
+                                }, {});
 
-                                return (
-                                    <tr key={d.id} className={`group transition-colors text-xs font-medium text-slate-600 ${selectedIds.includes(d.id) ? 'bg-indigo-50/60' : d.status === 'sold' ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-slate-50'}`}>
-                                        <td className="px-4 py-2 text-center">
-                                            <input type="checkbox" checked={selectedIds.includes(d.id)} onChange={() => handleSelect(d.id)} className="rounded border-slate-300  text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5" />
-                                        </td>
-                                        <td className="px-2 py-2"><StatusBadge status={d.status} /></td>
-                                        {isAdmin && (
-                                            <td className="px-2 py-2 font-bold text-slate-800 text-[10px] uppercase">
-                                                {d.creator ? d.creator.name : 'Super Admin'}
-                                            </td>
-                                        )}
-                                        <td className="px-2 py-2 font-medium text-slate-600 truncate max-w-[100px]" title={d.company}>{d.company || '-'}</td>
-                                        <td className="px-2 py-2 font-semibold text-slate-700 ">{d.certificate}</td>
-                                        <td className="px-2 py-2">
-                                            {d.buyer_name ? (
-                                                <div className="flex flex-col">
-                                                    <span className={`font-bold text-[10px] uppercase tracking-wide truncate max-w-[80px] ${d.status === 'sold' ? 'text-emerald-700' : 'text-slate-700'}`} title={`Client: ${d.buyer_name}\nMobile: ${d.buyer_mobile || '-'}\nCountry: ${d.buyer_country || '-'}`}>
-                                                        {d.buyer_name}
+                                return Object.entries(groupedDiamonds).map(([staffName, items]) => (
+                                    <React.Fragment key={staffName}>
+                                        {/* Group Header */}
+                                        <tr className="bg-indigo-50/50 border-b border-indigo-100">
+                                            <td colSpan={isAdmin ? "20" : "19"} className="px-4 py-2">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 border border-indigo-200">
+                                                        {staffName.charAt(0)}
+                                                    </div>
+                                                    <span className="font-bold text-slate-800 text-sm">{staffName}</span>
+                                                    <span className="bg-white px-2 py-0.5 rounded-full text-[10px] font-bold text-slate-500 border border-slate-200">
+                                                        {items.length} items
                                                     </span>
                                                 </div>
-                                            ) : (
-                                                <span className="text-slate-300 ">-</span>
-                                            )}
-                                        </td>
-                                        <td className="px-2 py-2">{getShapeDisplay(d.shape)}</td>
-                                        <td className="px-2 py-2 text-right font-semibold text-slate-800 ">{d.carat}</td>
-                                        <td className="px-2 py-2 text-center">{d.color}</td>
-                                        <td className="px-2 py-2 text-center">{d.clarity}</td>
-                                        <td className="px-2 py-2 text-center">{d.cut}</td>
-                                        <td className="px-2 py-2 text-center">{d.polish}</td>
-                                        <td className="px-2 py-2 text-center">{d.symmetry}</td>
-                                        <td className="px-2 py-2 text-center">{getFluorescenceShortCode(d.fluorescence)}</td>
-                                        {/* <td className="px-2 py-2 text-center text-slate-400 ">{d.table_percent}</td> */}
-                                        {/* <td className="px-2 py-2 text-center text-slate-400 ">{d.total_depth_percent}</td> */}
-                                        <td className="px-2 py-2 text-center">
-                                            <div className="flex flex-col items-center">
-                                                <span className="font-bold text-slate-700 ">{d.lab || 'IGI'}</span>
-                                                {d.report_url && (
-                                                    <a href={d.report_url} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 hover:underline" onClick={(e) => e.stopPropagation()}>View</a>
-                                                )}
-                                                {/* {d.growth_process && <span className="text-[8px] text-slate-400">{d.growth_process}</span>} */}
-                                            </div>
-                                        </td>
+                                            </td>
+                                        </tr>
+                                        {/* Items */}
+                                        {items.map((d) => {
+                                            const costPrice = d.price ? (parseFloat(d.price) * (1 - (parseFloat(d.discount) || 0) / 100)) : 0;
+                                            const salePrice = d.sale_price ? parseFloat(d.sale_price) : 0;
+                                            const profit = salePrice > 0 ? (salePrice - costPrice) : 0;
 
-                                        <td className="px-2 py-2 text-right font-bold text-indigo-600 ">
-                                            ${costPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </td>
-                                        <td className="px-2 py-2 text-center text-orange-500 font-bold">{d.discount ? `${d.discount}%` : '-'}</td>
-                                        <td className="px-2 py-2 text-right font-bold text-emerald-600 ">
-                                            {d.sale_price && Number(d.sale_price) > 0 ? `$${parseFloat(d.sale_price).toLocaleString()}` : '-'}
-                                        </td>
-                                        <td className={`px-2 py-2 text-right font-black ${profit > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
-                                            {profit > 0 ? `$${profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
-                                        </td>
-                                        <td className="px-2 py-2 text-center text-xs text-slate-500">{d.buyer_country || '-'}</td>
-                                        <td className="px-2 py-2 text-center text-xs text-slate-500">{d.seller_country || '-'}</td>
-                                        <td className="px-4 py-2 text-right">
-                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(d); }} className="p-1.5 text-slate-500  hover:text-indigo-600  hover:bg-indigo-50  rounded-md transition-colors" title="Edit">
-                                                    <Edit2 className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button onClick={(e) => { e.stopPropagation(); confirmDelete(d.id); }} className="p-1.5 text-slate-500  hover:text-red-600  hover:bg-red-50  rounded-md transition-colors" title="Delete">
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )
-                            })
+                                            return (
+                                                <tr key={d.id} className={`group transition-colors text-xs font-medium text-slate-600 ${selectedIds.includes(d.id) ? 'bg-indigo-50/60' : d.status === 'sold' ? 'bg-red-50/40 hover:bg-red-50' : 'hover:bg-slate-50'}`}>
+                                                    <td className="px-4 py-2 text-center">
+                                                        <input type="checkbox" checked={selectedIds.includes(d.id)} onChange={() => handleSelect(d.id)} className="rounded border-slate-300  text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5" />
+                                                    </td>
+                                                    <td className="px-2 py-2"><StatusBadge status={d.status} /></td>
+                                                    {isAdmin && (
+                                                        <td className="px-2 py-2 font-bold text-slate-800 text-[10px] uppercase">
+                                                            {d.creator ? d.creator.name : 'Super Admin'}
+                                                        </td>
+                                                    )}
+                                                    <td className="px-2 py-2 font-medium text-slate-600 truncate max-w-[100px]" title={d.company}>{d.company || '-'}</td>
+                                                    <td className="px-2 py-2 font-semibold text-slate-700 ">{d.certificate}</td>
+                                                    <td className="px-2 py-2">
+                                                        {d.buyer_name ? (
+                                                            <div className="flex flex-col">
+                                                                <span className={`font-bold text-[10px] uppercase tracking-wide truncate max-w-[80px] ${d.status === 'sold' ? 'text-emerald-700' : 'text-slate-700'}`} title={`Client: ${d.buyer_name}\nMobile: ${d.buyer_mobile || '-'}\nCountry: ${d.buyer_country || '-'}`}>
+                                                                    {d.buyer_name}
+                                                                </span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-300 ">-</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-2 py-2">{getShapeDisplay(d.shape)}</td>
+                                                    <td className="px-2 py-2 text-right font-semibold text-slate-800 ">{d.carat}</td>
+                                                    <td className="px-2 py-2 text-center">{d.color}</td>
+                                                    <td className="px-2 py-2 text-center">{d.clarity}</td>
+                                                    <td className="px-2 py-2 text-center">{d.cut}</td>
+                                                    <td className="px-2 py-2 text-center">{d.polish}</td>
+                                                    <td className="px-2 py-2 text-center">{d.symmetry}</td>
+                                                    <td className="px-2 py-2 text-center">{getFluorescenceShortCode(d.fluorescence)}</td>
+                                                    <td className="px-2 py-2 text-center">
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="font-bold text-slate-700 ">{d.lab || 'IGI'}</span>
+                                                            {d.report_url && (
+                                                                <a href={d.report_url} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 hover:underline" onClick={(e) => e.stopPropagation()}>View</a>
+                                                            )}
+                                                        </div>
+                                                    </td>
+
+                                                    <td className="px-2 py-2 text-right font-bold text-indigo-600 ">
+                                                        ${costPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-center text-orange-500 font-bold">{d.discount ? `${d.discount}%` : '-'}</td>
+                                                    <td className="px-2 py-2 text-right font-bold text-emerald-600 ">
+                                                        {d.sale_price && Number(d.sale_price) > 0 ? `$${parseFloat(d.sale_price).toLocaleString()}` : '-'}
+                                                    </td>
+                                                    <td className={`px-2 py-2 text-right font-black ${profit > 0 ? 'text-blue-600' : 'text-slate-300'}`}>
+                                                        {profit > 0 ? `$${profit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                                    </td>
+                                                    <td className="px-2 py-2 text-center text-xs text-slate-500">{d.buyer_country || '-'}</td>
+                                                    <td className="px-2 py-2 text-center text-xs text-slate-500">{d.seller_country || '-'}</td>
+                                                    <td className="px-4 py-2 text-right">
+                                                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={(e) => { e.stopPropagation(); handleEdit(d); }} className="p-1.5 text-slate-500  hover:text-indigo-600  hover:bg-indigo-50  rounded-md transition-colors" title="Edit">
+                                                                <Edit2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button onClick={(e) => { e.stopPropagation(); confirmDelete(d.id); }} className="p-1.5 text-slate-500  hover:text-red-600  hover:bg-red-50  rounded-md transition-colors" title="Delete">
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </React.Fragment>
+                                ));
+                            })()
                         )}
                     </tbody>
                 </table>

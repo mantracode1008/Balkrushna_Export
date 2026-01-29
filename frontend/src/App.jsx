@@ -5,9 +5,7 @@ import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Invoices from './pages/Invoices';
 import InvoiceForm from './pages/InvoiceForm';
-import Reports from './pages/Reports';
 import SalesHistory from './pages/SalesHistory';
-import Order from './pages/Order';
 import StaffManagement from './pages/StaffManagement';
 
 import InvoicePrint from './components/InvoicePrint';
@@ -64,14 +62,6 @@ const App = () => {
               <ProtectedRoute>
                 <MainLayout>
                   <SalesHistory />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
-
-            <Route path="/order" element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <Order />
                 </MainLayout>
               </ProtectedRoute>
             } />

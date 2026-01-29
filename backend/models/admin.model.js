@@ -2,7 +2,7 @@ module.exports = (sequelize, Sequelize) => {
     const Admin = sequelize.define("admin", {
         username: {
             type: Sequelize.STRING,
-            unique: true,
+            // unique: true,
             allowNull: true // Changed to optional
         },
         name: {
@@ -19,7 +19,7 @@ module.exports = (sequelize, Sequelize) => {
         },
         mobile: {
             type: Sequelize.STRING,
-            unique: true,
+            // unique: true,
             allowNull: true // Changed to optional for Admin, required for Staff logic handled in controller/validation
         },
         address: {
@@ -28,12 +28,12 @@ module.exports = (sequelize, Sequelize) => {
         },
         staff_id: {
             type: Sequelize.STRING,
-            unique: true, // Unique Staff ID
+            // unique: true, // Unique Staff ID
             allowNull: true
         },
         email: {
             type: Sequelize.STRING,
-            unique: true,
+            // unique: true,
             allowNull: true // Optional for Staff, Required for Admin
         },
         pin: {
@@ -60,6 +60,8 @@ module.exports = (sequelize, Sequelize) => {
             type: Sequelize.DATE,
             allowNull: true
         }
+    }, {
+        paranoid: true // Enable Soft Deletes
     });
 
     return Admin;

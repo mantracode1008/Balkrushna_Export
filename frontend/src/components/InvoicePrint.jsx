@@ -212,7 +212,9 @@ const InvoicePrint = () => {
                                 <th className="py-3 px-2 font-bold text-slate-600">Clarity</th>
                                 <th className="py-3 px-2 font-bold text-slate-600">Cut</th>
                                 <th className="py-3 px-2 font-bold text-slate-600">Polish</th>
-                                <th className="py-3 px-2 font-bold text-slate-600">Symmetry</th>
+                                <th className="py-3 px-2 font-bold text-slate-600">Sym</th>
+                                <th className="py-3 px-2 font-bold text-slate-600">Depth %</th>
+                                <th className="py-3 px-2 font-bold text-slate-600">Table %</th>
                                 <th className="py-3 px-2 font-bold text-slate-600 text-right">Rate / Carat</th>
                                 <th className="py-3 px-2 font-bold text-slate-600 text-right">Amount</th>
                             </tr>
@@ -244,6 +246,8 @@ const InvoicePrint = () => {
                                         <td className="py-3 px-2 text-slate-600 text-xs">{d.cut || '-'}</td>
                                         <td className="py-3 px-2 text-slate-600 text-xs">{d.polish || '-'}</td>
                                         <td className="py-3 px-2 text-slate-600 text-xs">{d.symmetry || '-'}</td>
+                                        <td className="py-3 px-2 text-slate-600 text-xs">{d.total_depth_percent || '-'}</td>
+                                        <td className="py-3 px-2 text-slate-600 text-xs">{d.table_percent || '-'}</td>
                                         <td className="py-3 px-2 text-right text-slate-700 font-semibold">
                                             <div>{currencySymbol}{clientRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                                             {invoice.currency !== 'USD' && (
@@ -316,23 +320,7 @@ const InvoicePrint = () => {
                             </div>
                         </div>
 
-                        {/* Payment Details */}
-                        {invoice.paid_amount > 0 && (
-                            <>
-                                <div className="flex justify-between py-1.5 text-sm px-2 text-emerald-700 bg-emerald-50 rounded mt-1">
-                                    <span className="font-bold">Amount Paid</span>
-                                    <span className="font-bold">
-                                        {currencySymbol}{parseFloat(invoice.paid_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between py-1.5 text-sm px-2 text-rose-700 bg-rose-50 rounded mt-1">
-                                    <span className="font-bold">Balance Due</span>
-                                    <span className="font-bold">
-                                        {currencySymbol}{parseFloat(invoice.balance_due).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                                    </span>
-                                </div>
-                            </>
-                        )}
+                        {/* Payment Details Removed by User Request */}
                     </div>
                 </div>
 
