@@ -5,10 +5,14 @@ import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
 import Invoices from './pages/Invoices';
 import InvoiceForm from './pages/InvoiceForm';
+import InvoiceReports from './pages/InvoiceReports';
 import SalesHistory from './pages/SalesHistory';
 import StaffManagement from './pages/StaffManagement';
 import SellerList from './pages/SellerList';
 import SellerDetails from './pages/SellerDetails';
+import SellerReports from './pages/SellerReports';
+import SellerBuyerGrid from './pages/SellerBuyerGrid';
+import SellerReportGrid from './pages/SellerReportGrid';
 
 import InvoicePrint from './components/InvoicePrint';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -58,6 +62,13 @@ const App = () => {
               </ProtectedRoute>
             } />
 
+            <Route path="/invoices/reports" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <InvoiceReports />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
 
 
             <Route path="/history" element={
@@ -80,6 +91,30 @@ const App = () => {
               <ProtectedRoute>
                 <MainLayout>
                   <SellerDetails />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/sellers/reports" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <SellerReports />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/sellers/sales-grid" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <SellerBuyerGrid />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+
+            <Route path="/sellers/grid-report" element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <SellerReportGrid />
                 </MainLayout>
               </ProtectedRoute>
             } />

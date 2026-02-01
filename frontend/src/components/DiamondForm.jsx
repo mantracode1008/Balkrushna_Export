@@ -126,9 +126,6 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
         sale_price: '',
         commission: '',
         company: '',
-        sale_price: '',
-        commission: '',
-        company: '',
         measurements: '',
         // Purchase Info
         seller_id: '',

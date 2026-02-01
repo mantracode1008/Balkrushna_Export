@@ -110,8 +110,8 @@ const StaffManagement = () => {
     };
 
     const filteredStaff = staff.filter(s =>
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.mobile.includes(searchTerm) ||
+        (s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (s.mobile && s.mobile.includes(searchTerm)) ||
         (s.staff_id && s.staff_id.toString().includes(searchTerm))
     );
 

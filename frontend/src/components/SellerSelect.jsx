@@ -1,26 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import sellerService from '../services/seller.service';
+import React, { useState } from 'react';
 import { Store, ChevronDown, Check } from 'lucide-react';
+import useSellers from '../hooks/useSellers';
 
 const SellerSelect = ({ value, onChange, placeholder = "Select Seller" }) => {
-    const [sellers, setSellers] = useState([]);
+    const { sellers, loading, createSeller } = useSellers();
     const [isOpen, setIsOpen] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [isCreating, setIsCreating] = useState(false);
+    const [newSellerName, setNewSellerName] = useState('');
 
-    useEffect(() => {
-        const loadSellers = async () => {
-            setLoading(true);
-            try {
-                const res = await sellerService.getAll();
-                setSellers(res.data);
-            } catch (err) {
-                console.error(err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadSellers();
-    }, []);
+    const handleCreate = async () => {
+        if (!newSellerName.trim()) return;
+        try {
+            const res = await createSeller({ name: newSellerName });
+            const created = res.data;
+            onChange({ target: { name: 'seller_id', value: created.id } });
+            setIsCreating(false);
+            setNewSellerName('');
+            setIsOpen(false);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to create seller");
+        }
+    };
+
 
     const selectedSeller = sellers.find(s => s.id === parseInt(value));
 
@@ -60,9 +62,29 @@ const SellerSelect = ({ value, onChange, placeholder = "Select Seller" }) => {
                             <div className="px-4 py-3 text-sm text-slate-400 text-center italic">No sellers found</div>
                         )}
                         <div className="border-t border-slate-100 mt-1 pt-1">
-                            <div className="px-4 py-2 text-xs text-indigo-600 font-bold cursor-pointer hover:bg-indigo-50 rounded-lg text-center">
-                                + Add New Seller
-                            </div>
+                            {isCreating ? (
+                                <div className="p-2 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <input
+                                        autoFocus
+                                        className="flex-1 text-xs border rounded px-2 py-1 outline-none focus:border-indigo-500"
+                                        placeholder="New Seller Name"
+                                        value={newSellerName}
+                                        onChange={(e) => setNewSellerName(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+                                    />
+                                    <button onClick={handleCreate} className="px-2 py-1 bg-indigo-600 text-white text-xs rounded font-bold">Add</button>
+                                </div>
+                            ) : (
+                                <div
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setIsCreating(true);
+                                    }}
+                                    className="px-4 py-2 text-xs text-indigo-600 font-bold cursor-pointer hover:bg-indigo-50 rounded-lg text-center"
+                                >
+                                    + Add New Seller
+                                </div>
+                            )}
                         </div>
                     </div>
                 </>

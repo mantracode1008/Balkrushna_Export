@@ -22,7 +22,10 @@ const ReportService = {
     getDashboardStats,
     getReports,
     getBuyingStats,
-    getTopSellingItems
+    getTopSellingItems,
+    getSellerBuyerSales: (params) => {
+        return api.get("/sellers/buyer-sales", { params });
+    }
 };
 
 export default ReportService;

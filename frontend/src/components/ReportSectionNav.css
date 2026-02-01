@@ -1,0 +1,107 @@
+/* Report Section Navigation Styles */
+
+.report-section-nav {
+    background: #ffffff;
+    border-bottom: 2px solid #e5e7eb;
+    padding: 0 16px;
+    margin-bottom: 20px;
+}
+
+.section-tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.section-tab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+    position: relative;
+}
+
+.section-tab:hover {
+    color: #4472C4;
+    background: #f9fafb;
+}
+
+.section-tab.active {
+    color: #4472C4;
+    border-bottom-color: #4472C4;
+    font-weight: 600;
+}
+
+.section-icon {
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+}
+
+.section-label {
+    line-height: 1;
+}
+
+.section-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    background: #4472C4;
+    color: white;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 10px;
+}
+
+.section-tab.active .section-badge {
+    background: #2C4F8C;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .report-section-nav {
+        padding: 0 8px;
+    }
+
+    .section-tab {
+        padding: 10px 16px;
+        font-size: 13px;
+    }
+
+    .section-icon {
+        font-size: 16px;
+    }
+
+    .section-badge {
+        font-size: 10px;
+        min-width: 18px;
+        height: 18px;
+    }
+}
+
+/* Scrollbar for horizontal overflow */
+.section-tabs::-webkit-scrollbar {
+    height: 4px;
+}
+
+.section-tabs::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+.section-tabs::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 2px;
+}

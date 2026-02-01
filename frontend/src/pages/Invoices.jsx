@@ -267,7 +267,11 @@ const Invoices = () => {
                     <p className="text-slate-500 mt-1">Manage sales and track payments.</p>
                 </div>
 
+
                 <div className="flex gap-3">
+                    <button onClick={() => window.location.href = '/invoices/reports'} className="flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl shadow-lg shadow-purple-200 hover:shadow-purple-300 transition-all font-semibold transform hover:-translate-y-0.5">
+                        <FileSpreadsheet className="w-5 h-5" /> Reports
+                    </button>
                     <button onClick={() => window.location.href = '/invoices/create'} className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all font-semibold transform hover:-translate-y-0.5">
                         <Plus className="w-5 h-5" /> New Invoice
                     </button>

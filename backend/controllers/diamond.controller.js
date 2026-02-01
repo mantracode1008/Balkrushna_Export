@@ -41,6 +41,28 @@ const ensureCompaniesExist = async (diamonds, userId) => {
     }
 };
 
+// Helper: Filter sensitive fields based on diamond status
+// Business Rule: Hide buyer details and profit when status != 'sold'
+const filterDiamondFields = (diamond) => {
+    if (!diamond) return diamond;
+
+    // Convert Sequelize instance to plain object if needed
+    const d = diamond.toJSON ? diamond.toJSON() : { ...diamond };
+
+    // Only show buyer/profit info for sold diamonds
+    if (d.status !== 'sold') {
+        delete d.buyer_name;
+        delete d.buyer_country;
+        delete d.buyer_mobile;
+        delete d.sale_price;
+        delete d.sold_by;
+        delete d.sale_date;
+        delete d.client_id;
+    }
+
+    return d;
+};
+
 exports.checkStatus = async (req, res) => {
     const { certificate } = req.params;
     if (!certificate) return res.status(400).send({ message: "Certificate ID required." });
@@ -258,33 +280,118 @@ exports.create = async (req, res) => {
 };
 
 exports.findAll = (req, res) => {
-    const { certificate, shape, clarity, color, company, seller_id } = req.query;
-    console.log(`Fetch All Diamonds | User: ${req.userId} | Role: ${req.userRole} | Query:`, req.query);
+    const {
+        certificate, shape, clarity, color, company, seller_id, lab,
+        minCarat, maxCarat, minPrice, maxPrice,
+        minTable, maxTable, minDepth, maxDepth,
+        status
+    } = req.query;
+
+    console.log(`[DEBUG] Fetch Diamonds Query:`, JSON.stringify(req.query, null, 2));
 
     var condition = {};
 
+    // 1. Text Search (Certificate)
     if (certificate) condition.certificate = { [Op.like]: `%${certificate}%` };
-    if (shape) condition.shape = { [Op.like]: `%${shape}%` };
-    if (clarity) condition.clarity = { [Op.like]: `%${clarity}%` };
-    if (color) condition.color = { [Op.like]: `%${color}%` };
-    if (company) condition.company = { [Op.like]: `%${company}%` };
+
+    // 2. Multi-Select Filters (Array or Single Value)
+    // Helper to handle Array (IN) vs Single (LIKE/EQ)
+    const addMultiFilter = (field, value) => {
+        if (!value) return;
+        // console.log(`[DEBUG] Adding Filter: ${field} =`, value, "IsArray:", Array.isArray(value));
+        if (Array.isArray(value)) {
+            condition[field] = { [Op.in]: value };
+        } else {
+            // Check if comma separated string
+            if (typeof value === 'string' && value.includes(',')) {
+                condition[field] = { [Op.in]: value.split(',') };
+            } else {
+                // Default to standard search (LIKE for text, Exact for codes if needed)
+                // Keeping LIKE to match previous behavior for single inputs
+                condition[field] = { [Op.like]: `%${value}%` };
+            }
+        }
+    };
+
+    addMultiFilter('shape', shape);
+    addMultiFilter('clarity', clarity);
+    addMultiFilter('color', color);
+    addMultiFilter('company', company);
+    addMultiFilter('lab', lab);
+
     if (seller_id) condition.seller_id = seller_id;
 
-    // Default: Only show In Stock items (hide sold and in_cart)
-    // User requested: "remove from inventory because that diamond can not sale to other"
-    // Status Filter
-    if (req.query.status === 'all') {
-        // No status filter applies (show everything)
-    } else if (req.query.status) {
-        condition.status = req.query.status;
+    // 3. Range Filters
+    // 3. Range Filters
+    const safeFloat = (val) => {
+        const parsed = parseFloat(val);
+        return isNaN(parsed) ? null : parsed;
+    };
+
+    if (minCarat || maxCarat) {
+        const min = safeFloat(minCarat);
+        const max = safeFloat(maxCarat);
+        if (min !== null || max !== null) {
+            console.log(`[DEBUG] Applying Carat Range: ${min} - ${max}`);
+            condition.carat = {};
+            if (min !== null) condition.carat[Op.gte] = min;
+            if (max !== null) condition.carat[Op.lte] = max;
+        }
+    }
+
+    if (minPrice || maxPrice) {
+        const min = safeFloat(minPrice);
+        const max = safeFloat(maxPrice);
+        if (min !== null || max !== null) {
+            console.log(`[DEBUG] Applying Price Range: ${min} - ${max}`);
+            condition.price = {};
+            if (min !== null) condition.price[Op.gte] = min;
+            if (max !== null) condition.price[Op.lte] = max;
+        }
+    }
+
+    if (minTable || maxTable) {
+        const min = safeFloat(minTable);
+        const max = safeFloat(maxTable);
+        if (min !== null || max !== null) {
+            // Cast string column to decimal for comparison
+            // OR use simple comparison if data is clean (risky). 
+            // Using simple Op for now but logged.
+            condition.table_percent = {};
+            if (min !== null) condition.table_percent[Op.gte] = min; // Might compare as string if col is string
+            if (max !== null) condition.table_percent[Op.lte] = max;
+        }
+    }
+
+    if (minDepth || maxDepth) {
+        const min = safeFloat(minDepth);
+        const max = safeFloat(maxDepth);
+        if (min !== null || max !== null) {
+            condition.total_depth_percent = {};
+            if (min !== null) condition.total_depth_percent[Op.gte] = min;
+            if (max !== null) condition.total_depth_percent[Op.lte] = max;
+        }
+    }
+
+    // 4. Status Filter
+    if (status === 'all') {
+        // Show everything (Admin view maybe?)
+    } else if (status) {
+        // Support multi-status if array
+        if (Array.isArray(status)) {
+            condition.status = { [Op.in]: status };
+        } else if (status.includes(',')) {
+            condition.status = { [Op.in]: status.split(',') };
+        } else {
+            condition.status = status;
+        }
     } else {
-        // Default: Only show In Stock items 
+        // Default
         condition.status = 'in_stock';
     }
 
-    // RBAC: Strict Staff Restriction
+    // 5. RBAC: Strict Staff Restriction
     if (req.userRole === 'admin') {
-        // Admin can filter by specific staff if provided
         if (req.query.staffId) {
             condition.created_by = req.query.staffId;
         }
@@ -294,6 +401,8 @@ exports.findAll = (req, res) => {
             { sold_by: req.userId }
         ];
     }
+
+    console.log(`[DEBUG] Final Where Condition:`, JSON.stringify(condition, null, 2));
 
     Diamond.findAll({
         where: condition,
@@ -312,9 +421,12 @@ exports.findAll = (req, res) => {
         order: [['createdAt', 'DESC']]
     })
         .then(data => {
-            res.send(data);
+            // Apply field filtering based on status
+            const filteredData = data.map(diamond => filterDiamondFields(diamond));
+            res.send(filteredData);
         })
         .catch(err => {
+            console.error("Filter Error:", err); // Log for debug
             res.status(500).send({
                 message:
                     err.message || "Some error occurred while retrieving diamonds."
@@ -328,7 +440,9 @@ exports.findOne = (req, res) => {
     Diamond.findByPk(id)
         .then(data => {
             if (data) {
-                res.send(data);
+                // Apply field filtering based on status
+                const filteredData = filterDiamondFields(data);
+                res.send(filteredData);
             } else {
                 res.status(404).send({
                     message: `Cannot find Diamond with id=${id}.`

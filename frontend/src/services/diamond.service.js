@@ -1,7 +1,11 @@
 import api from "./api";
+import qs from 'qs';
 
 const getAll = (params) => {
-    return api.get("/diamonds", { params });
+    return api.get("/diamonds", {
+        params,
+        paramsSerializer: (params) => qs.stringify(params, { arrayFormat: 'repeat' })
+    });
 };
 
 const get = (id) => {

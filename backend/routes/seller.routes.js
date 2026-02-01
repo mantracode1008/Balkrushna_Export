@@ -6,6 +6,7 @@ module.exports = app => {
 
     router.post("/", [verifyToken], sellers.create);
     router.get("/", [verifyToken], sellers.findAll);
+    router.get("/overdue", [verifyToken], sellers.getOverdueSellers); // Specific route BEFORE param route
     router.get("/:id", [verifyToken], sellers.findOne);
     router.put("/:id", [verifyToken], sellers.update);
     router.delete("/:id", [verifyToken], sellers.delete);

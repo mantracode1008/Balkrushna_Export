@@ -16,6 +16,7 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 // parse requests of content-type - application/x-www-form-urlencoded
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.set('query parser', 'extended'); // Force QS library
 app.use('/invoices', express.static('uploads/invoices')); // Serve invoices statically
 
 // simple route
@@ -47,6 +48,7 @@ require("./routes/client.routes")(app);
 require("./routes/seller.routes")(app);
 require("./routes/sellerPayment.routes")(app);
 require("./routes/pricing.routes")(app);
+require("./routes/report.routes")(app);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
