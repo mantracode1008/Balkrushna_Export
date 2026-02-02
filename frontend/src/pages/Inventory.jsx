@@ -34,7 +34,9 @@ const Inventory = () => {
     // Selection & Grouping
     const [selectedIds, setSelectedIds] = useState([]);
     const [selectedDiamond, setSelectedDiamond] = useState(null); // For Edit
-    const [isGrouped, setIsGrouped] = useState(false);
+    const [directSellData, setDirectSellData] = useState(null); // For Direct Sell Flow
+    const [groupBy, setGroupBy] = useState('');
+    const [showGroupMenu, setShowGroupMenu] = useState(false);
 
     // Modals
     const [showAddModal, setShowAddModal] = useState(false);
@@ -50,6 +52,7 @@ const Inventory = () => {
     // Grid Columns Configuration
     const columns = [
         { key: 'status', label: 'Status', width: '60px', format: (v) => <StatusBadge status={v} /> },
+        { key: 'buy_date', label: 'Date', width: '90px', format: (v) => v ? new Date(v).toLocaleDateString() : '-' },
         isAdmin ? { key: 'creator', label: 'Added By', width: '100px', format: (v) => v ? v.name : 'Admin', sortValue: (row) => row.creator?.name || 'Admin', type: 'string' } : { key: 'hidden_creator', hidden: true },
         { key: 'company', label: 'Company', width: '120px' },
         { key: 'certificate', label: 'Cert No', width: '100px' },
@@ -98,13 +101,22 @@ const Inventory = () => {
         setLoading(true);
         try {
             const params = { ...filters };
+            // Default sort could be handled here if API supports it, 
+            // but ExcelGrid handles client-side sort. 
+            // We'll trust the grid or backend default.
 
             if (isAdmin && filters.selectedStaffId) {
                 params.staffId = filters.selectedStaffId;
             }
 
             const res = await diamondService.getAll(params);
-            setDiamonds(res.data);
+
+            // Client-side default sort by Date Descending
+            const sortedData = (res.data || []).sort((a, b) => {
+                return new Date(b.buy_date || b.createdAt) - new Date(a.buy_date || a.createdAt);
+            });
+
+            setDiamonds(sortedData);
             setSelectedIds([]); // Clear selection on re-fetch
         } catch (err) {
             console.error(err);
@@ -156,11 +168,17 @@ const Inventory = () => {
         }
     };
 
-    const handleSuccess = async () => {
+    const handleSuccess = async (newData, action) => {
         setShowAddModal(false);
         setSelectedDiamond(null);
         setShowUploadModal(false);
+
         await fetchDiamonds();
+
+        if (action === 'sell' && newData) {
+            setDirectSellData(newData);
+            setShowSalesModal(true);
+        }
     };
 
     const handleExportSelected = () => {
@@ -189,30 +207,49 @@ const Inventory = () => {
     return (
         <div className="h-[calc(100vh-100px)] flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
             {/* Top Bar */}
-            <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-white">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 gap-4 border-b border-slate-100 bg-white">
                 <div className="flex items-center gap-3">
                     <div className="bg-indigo-50 p-2 rounded-xl text-indigo-600">
                         <LayoutGrid className="w-5 h-5" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-black text-slate-800 tracking-tight">Inventory</h1>
-                        <p className="text-xs text-slate-500 font-medium">
-                            {loading ? 'Updating...' : `${diamonds.length} stones`}
-                        </p>
+                        <h1 className="text-xl font-black text-slate-800 tracking-tight leading-none">Inventory</h1>
                     </div>
                 </div>
-                <div className="flex gap-2">
-                    <button
-                        onClick={() => setIsGrouped(!isGrouped)}
-                        className={`px-3 py-2 border rounded-xl flex items-center gap-2 transition-all text-xs font-bold ${isGrouped ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                    >
-                        <Layers size={14} /> Group by Staff
-                    </button>
-                    <button onClick={() => setShowUploadModal(true)} className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2 transition-all">
+                <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowGroupMenu(!showGroupMenu)}
+                            className={`flex-1 sm:flex-none justify-center px-3 py-2 border rounded-xl flex items-center gap-2 transition-all text-xs font-bold ${groupBy ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                        >
+                            <Layers size={14} /> {groupBy ? `Group: ${groupBy.charAt(0).toUpperCase() + groupBy.slice(1).replace('_', ' ')}` : 'Group By'}
+                        </button>
+                        {showGroupMenu && (
+                            <div className="absolute top-full right-0 mt-1 w-40 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1 flex flex-col gap-0.5 animate-in fade-in zoom-in-95">
+                                {[
+                                    { label: 'None', value: '' },
+                                    { label: 'Added By', value: 'creator' },
+                                    { label: 'Status', value: 'status' },
+                                    { label: 'Shape', value: 'shape' },
+                                    { label: 'Company', value: 'company' },
+                                    { label: 'Lab', value: 'lab' }
+                                ].map(opt => (
+                                    <button
+                                        key={opt.value}
+                                        onClick={() => { setGroupBy(opt.value); setShowGroupMenu(false); }}
+                                        className={`px-3 py-2 text-xs font-bold text-left rounded-lg transition-colors ${groupBy === opt.value ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <button onClick={() => setShowUploadModal(true)} className="flex-1 sm:flex-none justify-center px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-2 transition-all">
                         <Upload size={14} /> Import
                     </button>
-                    <button onClick={() => { setSelectedDiamond(null); setShowAddModal(true); }} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all">
-                        <Plus size={14} /> Add Diamond
+                    <button onClick={() => { setSelectedDiamond(null); setShowAddModal(true); }} className="flex-1 sm:flex-none justify-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all">
+                        <Plus size={14} /> Add
                     </button>
                 </div>
             </div>
@@ -227,18 +264,18 @@ const Inventory = () => {
             />
 
             {/* Action Bar (Selection) */}
-            <div className={`flex items-center justify-between px-4 py-2 bg-indigo-50/50 border-b border-indigo-100 transition-all ${selectedIds.length > 0 ? 'h-12 opacity-100' : 'h-0 opacity-0 overflow-hidden p-0 border-none'}`}>
-                <div className="flex items-center gap-2 text-xs font-bold text-indigo-700">
+            <div className={`flex flex-col sm:flex-row items-center justify-between px-4 py-2 bg-indigo-50/50 border-b border-indigo-100 transition-all ${selectedIds.length > 0 ? 'h-auto opacity-100' : 'h-0 opacity-0 overflow-hidden p-0 border-none'}`}>
+                <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 mb-2 sm:mb-0">
                     <CheckCircle size={14} /> {selectedIds.length} Selected
                 </div>
-                <div className="flex gap-2">
-                    <button onClick={() => setShowSalesModal(true)} className="px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-emerald-700 flex items-center gap-1">
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <button onClick={() => setShowSalesModal(true)} className="flex-1 sm:flex-none justify-center px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-emerald-700 flex items-center gap-1">
                         <DollarSign size={12} /> Sell
                     </button>
-                    <button onClick={handleExportSelected} className="px-3 py-1 bg-violet-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-violet-700 flex items-center gap-1">
+                    <button onClick={handleExportSelected} className="flex-1 sm:flex-none justify-center px-3 py-1 bg-violet-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-violet-700 flex items-center gap-1">
                         <Download size={12} /> Export
                     </button>
-                    <button onClick={confirmBulkDelete} className="px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-rose-700 flex items-center gap-1">
+                    <button onClick={confirmBulkDelete} className="flex-1 sm:flex-none justify-center px-3 py-1 bg-rose-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-rose-700 flex items-center gap-1">
                         <Trash2 size={12} /> Delete
                     </button>
                 </div>
@@ -252,15 +289,15 @@ const Inventory = () => {
                 onSelectionChange={setSelectedIds}
                 onRowClick={(row) => handleEdit(row)}
                 loading={loading}
-                groupBy={isGrouped ? 'creator' : null}
+                groupBy={groupBy || null}
             />
 
             {/* Modals */}
             {showSalesModal && (
                 <SalesModal
-                    selectedDiamonds={diamonds.filter(d => selectedIds.includes(d.id))}
-                    onClose={() => setShowSalesModal(false)}
-                    onSuccess={() => { handleSuccess(); setSelectedIds([]); setShowSalesModal(false); }}
+                    selectedDiamonds={directSellData ? [directSellData] : diamonds.filter(d => selectedIds.includes(d.id))}
+                    onClose={() => { setShowSalesModal(false); setDirectSellData(null); }}
+                    onSuccess={() => { handleSuccess(); setSelectedIds([]); setShowSalesModal(false); setDirectSellData(null); }}
                 />
             )}
             {showAddModal && <DiamondForm initialData={selectedDiamond} onClose={() => { setShowAddModal(false); setSelectedDiamond(null); }} onSuccess={handleSuccess} />}

@@ -10,6 +10,7 @@ const PaymentModal = ({ sellerId, isOpen, onClose, onSuccess }) => {
     const [unpaid, setUnpaid] = useState([]);
     const [selectedIds, setSelectedIds] = useState([]);
     const [amount, setAmount] = useState('');
+    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]); // Default Today
     const [mode, setMode] = useState('Bank Transfer');
     const [ref, setRef] = useState('');
     const [notes, setNotes] = useState('');
@@ -20,19 +21,16 @@ const PaymentModal = ({ sellerId, isOpen, onClose, onSuccess }) => {
             sellerPaymentService.getUnpaidDiamonds(sellerId).then(res => {
                 setUnpaid(res.data || []);
             });
+            setPaymentDate(new Date().toISOString().split('T')[0]); // Reset date on open
         }
     }, [isOpen, sellerId]);
 
+    // ... (keep handleToggle and AutoAllocate same) ...
     const handleToggle = (id) => {
         setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     };
 
     const AutoAllocate = () => {
-        // Simple logic: Select oldest items until amount is covered?
-        // For now, let's just let user select items manually, OR just enter amount and we auto-allocate backend?
-        // Backend supports explicit allocation.
-        // Let's keep it simple: User selects diamonds they are paying for.
-        // We sum up the 'due' amount of selected diamonds and set 'amount' to that total.
         const total = unpaid.filter(d => selectedIds.includes(d.id)).reduce((sum, d) => sum + parseFloat(d.due_amount), 0);
         setAmount(total.toFixed(2));
     };
@@ -47,15 +45,6 @@ const PaymentModal = ({ sellerId, isOpen, onClose, onSuccess }) => {
 
         setLoading(true);
         try {
-            // Distribute amount to selected items propotionally or fully?
-            // If amount = total due of selected, easy.
-            // If amount != total due, complex.
-            // Simplified Logic: 
-            // 1. Create allocations based on selected items.
-            // 2. If selected items total due > amount, allocate partially to them (oldest first or spread).
-            // 3. If no items selected, just record payment (Credit)? No, backend requires allocations currently for status update.
-
-            // Let's force selection for now to keep data clean.
             if (selectedIds.length === 0) {
                 alert("Please select at least one diamond to allocate payment to.");
                 setLoading(false);
@@ -64,9 +53,6 @@ const PaymentModal = ({ sellerId, isOpen, onClose, onSuccess }) => {
 
             const allocations = [];
             let remaining = parseFloat(amount);
-
-            // Allocate to selected IDs (FIFO ideally, but here arbitrary order of selection or list)
-            // Let's filter unpaid to get selected ones
             const selectedDiamonds = unpaid.filter(d => selectedIds.includes(d.id));
 
             selectedDiamonds.forEach(d => {
@@ -78,7 +64,8 @@ const PaymentModal = ({ sellerId, isOpen, onClose, onSuccess }) => {
 
             const payload = {
                 seller_id: sellerId,
-                amount: parseFloat(amount), // Actual Total Paid
+                amount: parseFloat(amount),
+                payment_date: paymentDate, // Send selected date
                 payment_mode: mode,
                 reference_number: ref,
                 notes: notes,
@@ -130,6 +117,11 @@ const PaymentModal = ({ sellerId, isOpen, onClose, onSuccess }) => {
 
                 <form onSubmit={handleSubmit} className="space-y-4 pt-4 border-t border-slate-100">
                     <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase ml-1">Payment Date</label>
+                            <input type="date" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                value={paymentDate} onChange={e => setPaymentDate(e.target.value)} required />
+                        </div>
                         <div>
                             <label className="text-xs font-bold text-slate-500 uppercase ml-1">Total Amount ($)</label>
                             <input type="number" step="0.01" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 font-bold text-slate-800 text-lg outline-none focus:ring-2 focus:ring-indigo-500/20"

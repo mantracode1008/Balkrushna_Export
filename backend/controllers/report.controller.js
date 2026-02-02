@@ -827,26 +827,26 @@ exports.getSellerGridReport = async (req, res) => {
             seller_id: { [Op.ne]: null }
         };
 
-        // Date Range
-        if (startDate && endDate) {
-            whereClause.buy_date = {
-                [Op.between]: [new Date(startDate), new Date(endDate)]
-            };
+        // Date Range (Allow partial)
+        if (startDate || endDate) {
+            whereClause.buy_date = {};
+            if (startDate) whereClause.buy_date[Op.gte] = new Date(startDate);
+            if (endDate) whereClause.buy_date[Op.lte] = new Date(endDate);
         }
 
-        // Filters
+        // Filters (Handle string/array mismatch)
         if (sellerId) {
-            const sellers = Array.isArray(sellerId) ? sellerId : sellerId.split(',');
+            const sellers = Array.isArray(sellerId) ? sellerId : String(sellerId).split(',');
             whereClause.seller_id = { [Op.in]: sellers };
         }
 
         if (staffId) {
-            const staff = Array.isArray(staffId) ? staffId : staffId.split(',');
+            const staff = Array.isArray(staffId) ? staffId : String(staffId).split(',');
             whereClause.created_by = { [Op.in]: staff };
         }
 
         if (shape) {
-            const shapes = Array.isArray(shape) ? shape : shape.split(',');
+            const shapes = Array.isArray(shape) ? shape : String(shape).split(',');
             whereClause.shape = { [Op.in]: shapes };
         }
 

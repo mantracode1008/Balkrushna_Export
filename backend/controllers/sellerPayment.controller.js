@@ -26,13 +26,51 @@ exports.create = async (req, res) => {
             created_by: req.userId
         }, { transaction: t });
 
-        // 2. Process Allocations
-        if (allocations && allocations.length > 0) {
-            let totalAllocated = 0;
+        // 2. Process Allocations (Auto-Allocate if missing)
+        let finalAllocations = allocations || [];
 
-            for (const alloc of allocations) {
+        // Auto-Allocation Logic
+        if (finalAllocations.length === 0) {
+            const unpaidDiamonds = await Diamond.findAll({
+                where: {
+                    seller_id: seller_id,
+                    payment_status: { [db.Sequelize.Op.ne]: 'paid' }
+                },
+                order: [['payment_due_date', 'ASC'], ['buy_date', 'ASC'], ['createdAt', 'ASC']],
+                transaction: t
+            });
+
+            let remainingPayment = parseFloat(amount);
+
+            for (const d of unpaidDiamonds) {
+                if (remainingPayment <= 0.01) break;
+
+                const buyPrice = parseFloat(d.buy_price || 0);
+                const paidAmt = parseFloat(d.paid_amount || 0);
+                const due = buyPrice - paidAmt;
+
+                if (due <= 0) continue;
+
+                let allocAmt = 0;
+                if (remainingPayment >= due) {
+                    allocAmt = due;
+                    remainingPayment -= due;
+                } else {
+                    allocAmt = remainingPayment;
+                    remainingPayment = 0;
+                }
+
+                finalAllocations.push({
+                    diamond_id: d.id,
+                    amount: allocAmt
+                });
+            }
+        }
+
+        // Apply Allocations
+        if (finalAllocations.length > 0) {
+            for (const alloc of finalAllocations) {
                 const { diamond_id, amount: allocAmount } = alloc;
-                totalAllocated += parseFloat(allocAmount);
 
                 // Create Allocation Record
                 await SellerPaymentAllocation.create({
@@ -48,9 +86,10 @@ exports.create = async (req, res) => {
                     const buyPrice = parseFloat(diamond.buy_price || 0);
 
                     let status = 'partially_paid';
-                    if (newPaidAmount >= buyPrice && buyPrice > 0) {
+                    // Tolerance for floating point
+                    if (newPaidAmount >= buyPrice - 0.01 && buyPrice > 0) {
                         status = 'paid';
-                    } else if (newPaidAmount <= 0) {
+                    } else if (newPaidAmount <= 0.01) {
                         status = 'unpaid';
                     }
 
@@ -60,9 +99,6 @@ exports.create = async (req, res) => {
                     }, { transaction: t });
                 }
             }
-
-            // Validate total allocation doesn't exceed payment amount (optional, but good practice)
-            // if (totalAllocated > parseFloat(amount)) ... warning? or just allow "over-allocation" error?
         }
 
         await t.commit();

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 import { Download, Calculator, Receipt, Users, Filter as FilterIcon } from 'lucide-react';
 import ExcelGrid from '../components/ExcelGrid';
+import LedgerTable from '../components/LedgerTable';
 import { utils, writeFile } from 'xlsx-js-style';
 
 const SellerReportGrid = () => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [groupBy, setGroupBy] = useState('seller_name'); // Default group by seller
+    const [groupByMode, setGroupByMode] = useState('seller'); // 'seller' or 'staff'
 
     // Filters State
     const [filters, setFilters] = useState({
@@ -30,10 +31,9 @@ const SellerReportGrid = () => {
 
     const fetchMetadata = async () => {
         try {
-            const token = localStorage.getItem('token');
             const [sellerRes, staffRes] = await Promise.all([
-                axios.get('http://localhost:8080/api/sellers', { headers: { 'x-access-token': token } }),
-                axios.get('http://localhost:8080/api/auth/staff', { headers: { 'x-access-token': token } })
+                api.get('/sellers'),
+                api.get('/auth/staff')
             ]);
             setSellers(sellerRes.data || []);
             setStaff(staffRes.data || []);
@@ -45,7 +45,6 @@ const SellerReportGrid = () => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const token = localStorage.getItem('token');
             // Build query params
             const params = {};
             if (filters.sellerId.length) params.sellerId = filters.sellerId.join(',');
@@ -56,9 +55,8 @@ const SellerReportGrid = () => {
             if (filters.minAmount) params.minAmount = filters.minAmount;
             if (filters.maxAmount) params.maxAmount = filters.maxAmount;
 
-            const response = await axios.get('http://localhost:8080/api/reports/sellers/grid', {
-                params,
-                headers: { 'x-access-token': token }
+            const response = await api.get('/reports/sellers/grid', {
+                params
             });
             setData(response.data);
         } catch (error) {
@@ -68,9 +66,14 @@ const SellerReportGrid = () => {
         }
     };
 
-    const handleApplyFilters = () => {
-        fetchData();
-    };
+    // Auto-fetch when filters change (Debounce for text/dates if needed, but selects are fine)
+    useEffect(() => {
+        // Debounce fetching to avoid double-firing
+        const timer = setTimeout(() => {
+            fetchData();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [filters]);
 
     const handleClearFilters = () => {
         setFilters({
@@ -81,7 +84,17 @@ const SellerReportGrid = () => {
             endDate: '',
             minAmount: '', maxAmount: ''
         });
-        // Optionally auto-fetch or wait for apply
+    };
+
+    const handleStatusChange = async (id, newStatus) => {
+        if (!id) return;
+        try {
+            await api.put(`/diamonds/${id}`, { payment_status: newStatus });
+            fetchData();
+        } catch (error) {
+            console.error("Error updating status:", error);
+            alert("Failed to update status");
+        }
     };
 
     const columns = useMemo(() => [
@@ -97,14 +110,20 @@ const SellerReportGrid = () => {
         {
             key: 'due_status',
             label: 'Status',
-            width: 80,
-            format: (val) => (
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${val === 'Paid' ? 'bg-emerald-100 text-emerald-700' :
-                        val === 'Partial' ? 'bg-orange-100 text-orange-700' :
-                            'bg-rose-100 text-rose-700'
-                    }`}>
-                    {val}
-                </span>
+            width: 100, // Increased width for dropdown
+            format: (val, row) => (
+                <select
+                    value={val === 'Paid' ? 'paid' : 'unpaid'}
+                    onChange={(e) => handleStatusChange(row.id, e.target.value)}
+                    onClick={(e) => e.stopPropagation()} // Prevent row click if any
+                    className={`px-2 py-1 rounded text-[10px] font-bold uppercase cursor-pointer outline-none border border-transparent hover:border-slate-300 transition-all ${val === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' :
+                        val === 'Partial' ? 'bg-amber-50 text-amber-600 border-amber-200' :
+                            'bg-rose-50 text-rose-600 border-rose-200'
+                        }`}
+                >
+                    <option value="unpaid">Pending</option>
+                    <option value="paid">Paid</option>
+                </select>
             )
         },
         {
@@ -117,6 +136,74 @@ const SellerReportGrid = () => {
         { key: 'buy_date', label: 'Date', width: 90, type: 'date' },
         { key: 'notes', label: 'Notes', width: 150, hidden: true }
     ], []);
+    // --- HIERARCHICAL DATA PROCESSING ---
+    const processedData = useMemo(() => {
+        if (!data || data.length === 0) return [];
+
+        const groups = {};
+        const primaryKey = groupByMode === 'seller' ? 'seller_name' : 'staff_name';
+        const secondaryKey = groupByMode === 'seller' ? 'staff_name' : 'seller_name';
+
+        data.forEach(row => {
+            const pKey = row[primaryKey] || 'Unknown';
+            const sKey = row[secondaryKey] || 'Unknown';
+
+            if (!groups[pKey]) {
+                groups[pKey] = {
+                    key: pKey,
+                    count: 0,
+                    totalAmount: 0,
+                    totalPaid: 0,
+                    totalDue: 0,
+                    subGroups: {}
+                };
+            }
+
+            // Update Primary Group Totals
+            groups[pKey].count += 1;
+            groups[pKey].totalAmount += parseFloat(row.buy_price || 0);
+            groups[pKey].totalPaid += parseFloat(row.paid_amount || 0);
+            groups[pKey].totalDue += parseFloat(row.due_amount || 0);
+
+            if (!groups[pKey].subGroups[sKey]) {
+                groups[pKey].subGroups[sKey] = {
+                    key: sKey,
+                    count: 0,
+                    totalAmount: 0,
+                    totalPaid: 0,
+                    totalDue: 0,
+                    rows: []
+                };
+            }
+
+            // Update Secondary Group Totals
+            groups[pKey].subGroups[sKey].count += 1;
+            groups[pKey].subGroups[sKey].totalAmount += parseFloat(row.buy_price || 0);
+            groups[pKey].subGroups[sKey].totalPaid += parseFloat(row.paid_amount || 0);
+            groups[pKey].subGroups[sKey].totalDue += parseFloat(row.due_amount || 0);
+
+            groups[pKey].subGroups[sKey].rows.push(row);
+        });
+
+        // specific function to sort numeric totals desc
+        const sortGroups = (obj) => Object.values(obj).sort((a, b) => b.totalDue - a.totalDue);
+
+        return sortGroups(groups).map(g => ({
+            ...g,
+            subGroups: sortGroups(g.subGroups)
+        }));
+
+    }, [data, groupByMode]);
+
+    // Global Totals
+    const globalTotals = useMemo(() => {
+        return processedData.reduce((acc, g) => ({
+            amount: acc.amount + g.totalAmount,
+            paid: acc.paid + g.totalPaid,
+            due: acc.due + g.totalDue,
+            count: acc.count + g.count
+        }), { amount: 0, paid: 0, due: 0, count: 0 });
+    }, [processedData]);
 
     const handleExport = () => {
         // Excel Export Logic
@@ -138,8 +225,8 @@ const SellerReportGrid = () => {
 
         // Add formatting here if using xlsx-js-style
         const wb = utils.book_new();
-        utils.book_append_sheet(wb, ws, "Seller Report");
-        writeFile(wb, `Seller_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        utils.book_append_sheet(wb, ws, "Seller Ledger");
+        writeFile(wb, `Seller_Ledger_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
     return (
@@ -157,10 +244,10 @@ const SellerReportGrid = () => {
                 </div>
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => setGroupBy(groupBy === 'seller_name' ? null : 'seller_name')}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${groupBy ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}
+                        onClick={() => setGroupByMode(groupByMode === 'seller' ? 'staff' : 'seller')}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border bg-white border-slate-200 text-slate-600 hover:text-indigo-600`}
                     >
-                        <Users size={14} /> Group by Seller
+                        <Users size={14} /> Group by {groupByMode === 'seller' ? 'Seller' : 'Staff'}
                     </button>
                     <button
                         onClick={handleExport}
@@ -222,12 +309,6 @@ const SellerReportGrid = () => {
                 />
 
                 <button
-                    onClick={handleApplyFilters}
-                    className="ml-auto px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700"
-                >
-                    Apply
-                </button>
-                <button
                     onClick={handleClearFilters}
                     className="px-3 py-1.5 text-rose-500 hover:bg-rose-50 rounded-lg text-xs font-bold"
                 >
@@ -235,17 +316,39 @@ const SellerReportGrid = () => {
                 </button>
             </div>
 
+            {/* TOP SUMMARY STICKY BAR */}
+            <div className="bg-slate-800 text-white px-6 py-3 flex items-center justify-between shadow-md">
+                <div className="flex items-center gap-6">
+                    <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Total Purchased</span>
+                        <span className="text-xl font-black font-mono tracking-tight">${globalTotals.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="h-8 w-px bg-slate-600"></div>
+                    <div>
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest block">Total Paid</span>
+                        <span className="text-xl font-bold font-mono tracking-tight text-emerald-400">${globalTotals.paid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="h-8 w-px bg-slate-600"></div>
+                    <div>
+                        <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest block">Total Due</span>
+                        <span className="text-xl font-black font-mono tracking-tight text-rose-400">${globalTotals.due.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    </div>
+                </div>
+                <div className="text-right">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Total Diamonds</span>
+                    <span className="text-lg font-bold text-white">{globalTotals.count}</span>
+                </div>
+            </div>
+
             {/* Grid */}
             <div className="flex-1 overflow-hidden p-4">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full overflow-hidden flex flex-col">
-                    <ExcelGrid
-                        data={data}
-                        columns={columns}
-                        loading={loading}
-                        groupBy={groupBy}
-                        emptyMessage="No purchases found for selected filters."
-                    />
-                </div>
+                <LedgerTable
+                    data={processedData}
+                    columns={columns}
+                    loading={loading}
+                    groupByMode={groupByMode}
+                    emptyMessage="No ledger entries found."
+                />
             </div>
         </div>
     );

@@ -42,52 +42,58 @@ exports.findAll = async (req, res) => {
             order: [['createdAt', 'DESC']]
         });
 
-        // For summary view, we might want to calculate totals "on the fly" or fetch via separate aggregation query.
-        // For MVP, simple list is fine. Advanced: Add purchase/payment sums.
-
-        // Let's add simple stats if requested
+        // Add stats if requested
         if (req.query.includeStats === 'true') {
             const sellersWithStats = await Promise.all(sellers.map(async (seller) => {
                 const s = seller.toJSON();
-                // Total Purchased
+
+                // 1. Total Purchased (Source of Truth: Diamonds with a buy_price)
+                const totalPurchased = await Diamond.sum('buy_price', {
+                    where: { seller_id: seller.id }
+                }) || 0;
+
+                // 2. Total Paid (Source of Truth: SellerPayments)
+                const totalPaid = await SellerPayment.sum('amount', {
+                    where: { seller_id: seller.id }
+                }) || 0;
+
+                // 3. Total Due
+                // Due is simply Purchased - Paid.
+                // We do NOT use diamond.paid_amount sum because unallocated payments might exist.
+                const totalDue = totalPurchased - totalPaid;
+
+                // 4. Earliest Due Date & Pending Count
+                // For this we check diamonds that effectively have an unpaid balance.
+                // Since we rely on global payment sum, we approximate "pending diamonds"
+                // by checking those where buy_price > paid_amount in the diamond record.
+                // This assumes payments are allocated. If not, this might be slightly off count-wise,
+                // but totals are correct.
+
                 const diamonds = await Diamond.findAll({
-                    where: { seller_id: seller.id },
-                    attributes: ['buy_price', 'paid_amount', 'payment_due_date']
+                    where: {
+                        seller_id: seller.id,
+                        [Op.and]: [
+                            Sequelize.where(Sequelize.col('buy_price'), '>', Sequelize.col('paid_amount'))
+                        ]
+                    },
+                    attributes: ['payment_due_date']
                 });
 
-                let totalPurchased = 0;
-                let totalPaid = 0;
-                let totalDue = 0;
                 let earliestDueDate = null;
-                let pendingDiamondsCount = 0;
-
                 diamonds.forEach(d => {
-                    const buyPrice = parseFloat(d.buy_price || 0);
-                    const paidAmount = parseFloat(d.paid_amount || 0);
-                    const due = buyPrice - paidAmount;
-
-                    totalPurchased += buyPrice;
-                    totalPaid += paidAmount;
-
-                    if (due > 0.01) { // Has outstanding due
-                        totalDue += due;
-                        pendingDiamondsCount++;
-
-                        // Track earliest due date
-                        if (d.payment_due_date) {
-                            const dueDate = new Date(d.payment_due_date);
-                            if (!earliestDueDate || dueDate < earliestDueDate) {
-                                earliestDueDate = dueDate;
-                            }
+                    if (d.payment_due_date) {
+                        const due = new Date(d.payment_due_date);
+                        if (!earliestDueDate || due < earliestDueDate) {
+                            earliestDueDate = due;
                         }
                     }
                 });
 
-                s.total_purchased = totalPurchased;
-                s.total_paid = totalPaid;
-                s.total_due = totalDue;
+                s.total_purchased = parseFloat(totalPurchased).toFixed(2);
+                s.total_paid = parseFloat(totalPaid).toFixed(2);
+                s.total_due = parseFloat(totalDue).toFixed(2);
                 s.earliest_due_date = earliestDueDate ? earliestDueDate.toISOString().split('T')[0] : null;
-                s.pending_diamonds_count = pendingDiamondsCount;
+                s.pending_diamonds_count = diamonds.length;
 
                 return s;
             }));
@@ -96,6 +102,7 @@ exports.findAll = async (req, res) => {
             res.send(sellers);
         }
     } catch (err) {
+        console.error("Error in findAll sellers:", err);
         res.status(500).send({ message: err.message || "Error retrieving Sellers." });
     }
 };

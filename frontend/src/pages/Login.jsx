@@ -130,7 +130,7 @@ const Login = () => {
 
     useEffect(() => {
         const user = authService.getCurrentUser();
-        if (user) navigate('/');
+        if (user && user.accessToken) navigate('/');
     }, [navigate]);
 
     const handleLogin = async (e) => {

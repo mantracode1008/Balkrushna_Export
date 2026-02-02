@@ -237,7 +237,10 @@ const ExcelGrid = ({
                                         className="bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors"
                                         onClick={() => toggleGroup(groupName)}
                                     >
-                                        <td colSpan={columns.length + 1} className="px-4 py-1.5 border-b border-indigo-100/50">
+                                        <td
+                                            colSpan={Object.values(visibleColumns).filter(Boolean).length + 1}
+                                            className="px-4 py-1.5 border-b border-indigo-100/50 sticky left-0 z-10 bg-slate-100"
+                                        >
                                             <div className="flex items-center gap-2">
                                                 <ChevronRight size={14} className={`text-slate-500 transition-transform ${expandedGroups[groupName] ? 'rotate-90' : ''}`} />
                                                 <span className="text-secondary text-xs font-bold uppercase tracking-wider text-slate-500">{groupName}</span>
@@ -253,24 +256,16 @@ const ExcelGrid = ({
                         {!loading && !groupBy && renderRows(sortedData)}
 
                     </tbody>
-                </table>
-            </div>
-
-            {/* Sticky Footer for Totals */}
-            <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 overflow-hidden">
-                <table className="w-full">
-                    <tbody>
-                        <tr className="bg-slate-800 text-white">
-                            <td className="w-10 px-2 py-2 text-center text-[10px] font-bold border-r border-slate-700">
+                    <tfoot className="sticky bottom-0 z-30 bg-slate-800 text-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                        <tr>
+                            <td className="w-10 px-2 py-2 text-center text-[10px] font-bold border-r border-slate-700 bg-slate-800">
                                 {sortedData.length}
                             </td>
                             {columns.map(col => visibleColumns[col.key] && (
                                 <td
                                     key={col.key}
-                                    className="px-3 py-2 text-xs font-bold border-r border-slate-700 whitespace-nowrap"
+                                    className="px-3 py-2 text-xs font-bold border-r border-slate-700 whitespace-nowrap bg-slate-800"
                                     style={{
-                                        width: col.width,
-                                        minWidth: col.width,
                                         textAlign: col.type === 'number' || col.type === 'currency' ? 'right' : 'left'
                                     }}
                                 >
@@ -282,10 +277,10 @@ const ExcelGrid = ({
                                 </td>
                             ))}
                         </tr>
-                    </tbody>
+                    </tfoot>
                 </table>
             </div>
-        </div>
+        </div >
     );
 };
 

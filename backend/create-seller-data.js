@@ -61,11 +61,15 @@ const createSellerData = async () => {
                     carat: parseFloat(carat),
                     color,
                     clarity,
-                    price,
+                    price: price, // Cost Price field
                     certificate: `GIA${Date.now()}${seller.id}${i}${Math.floor(Math.random() * 10000)}`,
                     seller_id: seller.id,
                     status: 'in_stock',
-                    purchase_date: new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000),
+                    // Corrected Fields matching Model
+                    buy_date: new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000),
+                    buy_price: price,
+                    payment_due_date: new Date(Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000), // Future Date
+
                     created_by: admin.id,
                     quantity: 1,
                     discount: 0,

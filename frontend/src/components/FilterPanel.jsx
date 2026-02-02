@@ -116,37 +116,44 @@ const FilterPanel = ({ filters, setFilters, onSearch, loading, companies = [] })
         return acc + 1;
     }, 0);
 
+    const [showAdvanced, setShowAdvanced] = useState(false);
+
     return (
-        <div className="flex flex-col gap-3 p-4 bg-slate-50/50 border-b border-slate-200">
+        <div className="flex flex-col gap-2 p-2 bg-slate-50/50 border-b border-slate-200 transition-all duration-300">
             {/* Row 1: Primary Filters */}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
 
                 {/* Search */}
-                <div className="relative group w-64">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-3.5 w-3.5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
+                <div className="relative group w-48 flex items-center gap-1">
+                    <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="h-3.5 w-3.5 text-slate-400" />
+                        </div>
+                        <input
+                            type="text"
+                            className="block w-full pl-9 pr-2 py-1.5 border border-slate-200 rounded-lg leading-5 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-xs font-bold shadow-sm"
+                            placeholder="Search ID/Cert..."
+                            value={filters.search}
+                            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                            onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+                        />
                     </div>
-                    <input
-                        type="text"
-                        className="block w-full pl-9 pr-4 py-1.5 border border-slate-200 rounded-lg leading-5 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-xs font-bold shadow-sm"
-                        placeholder="Search Cert / ID..."
-                        value={filters.search}
-                        onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                        onKeyDown={(e) => e.key === 'Enter' && onSearch()}
-                    />
+                    <button onClick={onSearch} className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-colors">
+                        <Search size={14} />
+                    </button>
                 </div>
 
                 <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
                 {/* Status Toggle */}
-                <div className="flex bg-slate-200/50 p-1 rounded-lg">
+                <div className="flex bg-slate-200/50 p-0.5 rounded-lg">
                     {['in_stock', 'sold', 'all'].map(status => (
                         <button
                             key={status}
                             onClick={() => setFilters(prev => ({ ...prev, status }))}
-                            className={`px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${filters.status === status ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${filters.status === status ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            {status.replace('_', ' ')}
+                            {status === 'in_stock' ? 'Stock' : status}
                         </button>
                     ))}
                 </div>
@@ -175,12 +182,19 @@ const FilterPanel = ({ filters, setFilters, onSearch, loading, companies = [] })
 
                 {/* Action Buttons */}
                 <div className="ml-auto flex items-center gap-2">
+                    <button
+                        onClick={() => setShowAdvanced(!showAdvanced)}
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded transition-colors ${showAdvanced ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-indigo-600'}`}
+                    >
+                        {showAdvanced ? 'Hide Advanced' : 'Advanced Filters'}
+                    </button>
+
                     {activeFilterCount > 0 && (
                         <button
                             onClick={clearFilters}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
                         >
-                            <X size={12} /> Clear ({activeFilterCount})
+                            <X size={12} />
                         </button>
                     )}
                     <button
@@ -188,58 +202,58 @@ const FilterPanel = ({ filters, setFilters, onSearch, loading, companies = [] })
                         className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700 active:translate-y-0.5 transition-all"
                     >
                         {loading ? <RefreshCw size={12} className="animate-spin" /> : <Filter size={12} />}
-                        Apply Filters
+                        Apply
                     </button>
                 </div>
             </div>
 
             {/* Row 2: Advanced Ranges */}
-            <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-100 mt-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mr-1">Advanced:</span>
-
-                <RangeInput
-                    label="Carat"
-                    min={filters.minCarat} max={filters.maxCarat}
-                    onMinChange={(val) => handleRangeChange('minCarat', val)}
-                    onMaxChange={(val) => handleRangeChange('maxCarat', val)}
-                />
-
-                <RangeInput
-                    label="Price"
-                    min={filters.minPrice} max={filters.maxPrice}
-                    onMinChange={(val) => handleRangeChange('minPrice', val)}
-                    onMaxChange={(val) => handleRangeChange('maxPrice', val)}
-                />
-
-                <RangeInput
-                    label="Table"
-                    min={filters.minTable} max={filters.maxTable}
-                    onMinChange={(val) => handleRangeChange('minTable', val)}
-                    onMaxChange={(val) => handleRangeChange('maxTable', val)}
-                />
-
-                <RangeInput
-                    label="Depth"
-                    min={filters.minDepth} max={filters.maxDepth}
-                    onMinChange={(val) => handleRangeChange('minDepth', val)}
-                    onMaxChange={(val) => handleRangeChange('maxDepth', val)}
-                />
-
-                <MultiSelect
-                    label="Lab"
-                    options={['GIA', 'IGI', 'HRD', 'FM']}
-                    selected={filters.lab}
-                    onChange={(val) => handleMultiChange('lab', val)}
-                />
-                {companies.length > 0 && (
-                    <MultiSelect
-                        label="Company"
-                        options={companies}
-                        selected={filters.company}
-                        onChange={(val) => handleMultiChange('company', val)}
+            {showAdvanced && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 animate-in slide-in-from-top-1 fade-in duration-200">
+                    <RangeInput
+                        label="Carat"
+                        min={filters.minCarat} max={filters.maxCarat}
+                        onMinChange={(val) => handleRangeChange('minCarat', val)}
+                        onMaxChange={(val) => handleRangeChange('maxCarat', val)}
                     />
-                )}
-            </div>
+
+                    <RangeInput
+                        label="Price"
+                        min={filters.minPrice} max={filters.maxPrice}
+                        onMinChange={(val) => handleRangeChange('minPrice', val)}
+                        onMaxChange={(val) => handleRangeChange('maxPrice', val)}
+                    />
+
+                    <RangeInput
+                        label="Table"
+                        min={filters.minTable} max={filters.maxTable}
+                        onMinChange={(val) => handleRangeChange('minTable', val)}
+                        onMaxChange={(val) => handleRangeChange('maxTable', val)}
+                    />
+
+                    <RangeInput
+                        label="Depth"
+                        min={filters.minDepth} max={filters.maxDepth}
+                        onMinChange={(val) => handleRangeChange('minDepth', val)}
+                        onMaxChange={(val) => handleRangeChange('maxDepth', val)}
+                    />
+
+                    <MultiSelect
+                        label="Lab"
+                        options={['GIA', 'IGI', 'HRD', 'FM']}
+                        selected={filters.lab}
+                        onChange={(val) => handleMultiChange('lab', val)}
+                    />
+                    {companies.length > 0 && (
+                        <MultiSelect
+                            label="Company"
+                            options={companies}
+                            selected={filters.company}
+                            onChange={(val) => handleMultiChange('company', val)}
+                        />
+                    )}
+                </div>
+            )}
         </div>
     );
 };

@@ -74,7 +74,7 @@ const CompanySelect = ({ value, onChange, placeholder = "Select Company..." }) =
                 </div>
 
                 {isOpen && (
-                    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 max-h-64 overflow-auto py-2 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="absolute z-[100] w-full min-w-[240px] mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 max-h-64 overflow-auto py-2 animate-in fade-in zoom-in-95 duration-200">
                         {filteredOptions.length === 0 ? (
                             <div
                                 className="px-5 py-3 cursor-pointer hover:bg-slate-50 text-indigo-600 font-bold text-xs flex items-center gap-2 border-t border-slate-50 mt-1"
