@@ -181,25 +181,53 @@ const Inventory = () => {
         }
     };
 
+    // State to track column visibility from ExcelGrid
+    const [activeColumnVisibility, setActiveColumnVisibility] = useState({});
+
     const handleExportSelected = () => {
         const dataToExport = selectedIds.length > 0
             ? diamonds.filter(d => selectedIds.includes(d.id))
             : diamonds;
 
+        // Filter valid columns based on current visibility
+        const exportableColumns = columns.filter(col => activeColumnVisibility[col.key]);
+
         const exportData = dataToExport.map(d => {
-            return {
-                Certificate: d.certificate,
-                Shape: d.shape,
-                Carat: d.carat,
-                Color: d.color,
-                Clarity: d.clarity,
-                Price: d.price,
-                Status: d.status
-            };
+            const row = {};
+            exportableColumns.forEach(col => {
+                let val = d[col.key];
+
+                // Custom handling for specific fields or formatting
+                if (col.key === 'shape') val = getShapeDisplay(val);
+                else if (col.key === 'buy_date' && val) val = new Date(val).toLocaleDateString();
+                else if (col.key === 'fluorescence') val = val === 'NONE' ? 'N' : val;
+                else if (col.key === 'discount' && val) val = `${val}%`;
+                else if (col.type === 'currency' && val) val = `$${parseFloat(val).toFixed(2)}`;
+                else if (col.key === 'seller_country' && d.seller?.address) val = d.seller.address;
+                else if (col.key === 'creator') val = d.creator?.name || 'Admin';
+                else if (col.key === 'profit') {
+                    // Re-calculate profit logic
+                    const cost = d.price ? (parseFloat(d.price) * (1 - (parseFloat(d.discount) || 0) / 100)) : 0;
+                    const sale = d.sale_price ? parseFloat(d.sale_price) : 0;
+                    val = sale > 0 ? `$${(sale - cost).toFixed(2)}` : '-';
+                }
+
+                // Fallback for objects/nulls
+                if (val === null || val === undefined) val = '';
+                if (typeof val === 'object') val = JSON.stringify(val); // Safety net
+
+                row[col.label] = val;
+            });
+            return row;
         });
 
         const wb = XLSX.utils.book_new();
         const ws = XLSX.utils.json_to_sheet(exportData);
+
+        // Auto-width columns
+        const wscols = exportableColumns.map(c => ({ wch: 15 }));
+        ws['!cols'] = wscols;
+
         XLSX.utils.book_append_sheet(wb, ws, "Inventory");
         XLSX.writeFile(wb, "Inventory.xlsx");
     };
@@ -290,6 +318,8 @@ const Inventory = () => {
                 onRowClick={(row) => handleEdit(row)}
                 loading={loading}
                 groupBy={groupBy || null}
+                gridId="inventory-grid"
+                onColumnVisibilityChange={setActiveColumnVisibility}
             />
 
             {/* Modals */}

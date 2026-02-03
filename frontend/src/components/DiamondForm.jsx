@@ -212,7 +212,9 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
                 onClose();
             }, 1000);
         } catch (err) {
-            setError(err.message || "Error saving");
+            console.error(err);
+            const msg = err.response?.data?.message || err.message || "Error saving";
+            setError(msg);
             setLoading(false);
         }
     };
@@ -342,7 +344,7 @@ const DiamondForm = ({ onClose, onSuccess, initialData }) => {
                                 <div className="flex justify-between items-center">
                                     <CompanySelect
                                         value={formData.company}
-                                        onChange={(val) => setFormData(prev => ({ ...prev, company: val }))}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, company: e.target.value }))}
                                     />
                                     <button
                                         type="button"

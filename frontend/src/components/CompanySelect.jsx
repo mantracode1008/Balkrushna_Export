@@ -24,9 +24,9 @@ const CompanySelect = ({ value, onChange, placeholder = "Select Company..." }) =
         if (value) setQuery(value);
     }, [value]);
 
-    const filteredOptions = query === ''
+    const filteredOptions = !query
         ? options
-        : options.filter((company) => company && company.toLowerCase().includes(query.toLowerCase()));
+        : options.filter((company) => company && String(company).toLowerCase().includes(String(query).toLowerCase()));
 
     useEffect(() => {
         function handleClickOutside(event) {

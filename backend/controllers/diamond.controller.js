@@ -18,10 +18,10 @@ const ensureCompaniesExist = async (diamonds, userId) => {
     try {
         const companies = new Set();
         if (Array.isArray(diamonds)) {
-            diamonds.forEach(d => { if (d.company) companies.add(d.company.trim()); });
+            diamonds.forEach(d => { if (d.company) companies.add(String(d.company).trim()); });
         } else {
             // Single Object
-            if (diamonds.company) companies.add(diamonds.company.trim());
+            if (diamonds.company) companies.add(String(diamonds.company).trim());
         }
 
         if (companies.size === 0) return;
@@ -53,13 +53,8 @@ const filterDiamondFields = (diamond) => {
 
     // Only show buyer/profit info for sold diamonds
     if (d.status !== 'sold') {
-        delete d.buyer_name;
-        delete d.buyer_country;
-        delete d.buyer_mobile;
-        delete d.sale_price;
-        delete d.sold_by;
-        delete d.sale_date;
-        delete d.client_id;
+        const sensitive = ['buyer_name', 'buyer_country', 'buyer_mobile', 'sale_price', 'sold_by', 'sale_date', 'client_id'];
+        sensitive.forEach(field => delete d[field]);
     }
 
     return d;
@@ -301,11 +296,11 @@ exports.create = async (req, res) => {
         company: req.body.company,
         // Purchase Info
         seller_id: req.body.seller_id,
-        buy_price: parseFloat(req.body.buy_price) || 0,
-        buy_date: req.body.buy_date,
-        payment_due_date: req.body.payment_due_date,
+        buy_price: parseFloat(req.body.buy_price) || (parseFloat(req.body.price || 0) * (1 - (parseFloat(req.body.discount || 0) / 100))) || 0,
+        buy_date: req.body.buy_date || null,
+        payment_due_date: req.body.payment_due_date || null,
         payment_status: req.body.payment_status || 'unpaid',
-        paid_amount: parseFloat(req.body.paid_amount) || 0, // Usually 0 on creation unless paid immediately logic elsewhere
+        paid_amount: parseFloat(req.body.paid_amount) || 0, // Usually 0 on creation unless paid immediately
 
         created_by: req.userId // Assign Creator from Token
     };
@@ -314,40 +309,10 @@ exports.create = async (req, res) => {
         .then(async data => {
             // Check for Auto-Payment
             if (req.body.payment_status === 'paid' && data.id && data.seller_id) {
-                await processAutoPayment(data, req.userId);
-                // processAutoPayment assumes diamond has fields. data has them. (paid_amount should be set to price by frontend or us)
-                // If frontend set paid_amount=price, our helper logic (paid < buy_price) returns false.
-                // We need to fix helper to rely on the intent, or handle the paid_amount.
-
-                // Correction: Frontend sets status='paid' and paid_amount=price.
-                // Backend: 'data' has paid_amount=price.
-                // We need to record the payment entry retrospectively.
-
-                // Let's adjust helper:
-                // If status is paid, create Ledger Entry for the full amount.
-                // We might need to fetch the JUST created diamond to ensure consistent types?
-                // data is fine.
-
-                // Re-implementation of helper logic inside block for clarity:
-                try {
-                    const payAmt = parseFloat(data.buy_price);
-                    const payment = await SellerPayment.create({
-                        seller_id: data.seller_id,
-                        amount: payAmt,
-                        payment_date: data.payment_due_date || new Date(),
-                        payment_mode: 'Cash',
-                        reference_number: `AUTO-PAY-${data.certificate}`,
-                        notes: 'Auto-generated via Add Diamond',
-                        created_by: req.userId
-                    });
-
-                    await SellerPaymentAllocation.create({
-                        payment_id: payment.id,
-                        diamond_id: data.id,
-                        allocated_amount: payAmt
-                    });
-                } catch (e) { console.error(e); }
+                // If it is marked as paid, we assume full payment of the buy_price
+                await processAutoPayment(data, req.userId, diamond.buy_price);
             }
+
             res.send(data);
         })
         .catch(err => {
@@ -574,9 +539,18 @@ exports.update = async (req, res) => {
 
     // Purchase Info Updates
     if (updateData.seller_id !== undefined) updateData.seller_id = updateData.seller_id;
-    if (updateData.buy_price !== undefined) updateData.buy_price = parseFloat(updateData.buy_price) || 0;
-    if (updateData.buy_date !== undefined) updateData.buy_date = updateData.buy_date;
-    if (updateData.payment_due_date !== undefined) updateData.payment_due_date = updateData.payment_due_date;
+
+    // Auto-calculate buy_price if price/discount changes and buy_price is not explicit
+    if ((updateData.price !== undefined || updateData.discount !== undefined) && updateData.buy_price === undefined) {
+        const p = parseFloat(updateData.price || 0);
+        const d = parseFloat(updateData.discount || 0);
+        updateData.buy_price = p * (1 - d / 100);
+    } else if (updateData.buy_price !== undefined) {
+        updateData.buy_price = parseFloat(updateData.buy_price) || 0;
+    }
+
+    if (updateData.buy_date !== undefined) updateData.buy_date = updateData.buy_date || null;
+    if (updateData.payment_due_date !== undefined) updateData.payment_due_date = updateData.payment_due_date || null;
     if (updateData.payment_status !== undefined) updateData.payment_status = updateData.payment_status;
     // paid_amount is usually updated via Payment Controller, but allow manual override if needed logic permits
 

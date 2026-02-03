@@ -9,6 +9,7 @@ const SellerReportGrid = () => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(false);
     const [groupByMode, setGroupByMode] = useState('seller'); // 'seller' or 'staff'
+    const [selectedGroupSummary, setSelectedGroupSummary] = useState(null);
 
     // Filters State
     const [filters, setFilters] = useState({
@@ -341,14 +342,55 @@ const SellerReportGrid = () => {
             </div>
 
             {/* Grid */}
-            <div className="flex-1 overflow-hidden p-4">
+            <div className="flex-1 overflow-hidden p-4 relative">
                 <LedgerTable
                     data={processedData}
                     columns={columns}
                     loading={loading}
                     groupByMode={groupByMode}
                     emptyMessage="No ledger entries found."
+                    onGroupClick={(group) => setSelectedGroupSummary(group)}
                 />
+
+                {/* Selected Group Summary Popup */}
+                {selectedGroupSummary && (
+                    <div className="absolute bottom-6 right-6 z-50 animate-in slide-in-from-right duration-300">
+                        <div className="bg-white rounded-xl shadow-2xl border border-slate-200 p-5 w-80 relative overflow-hidden">
+                            <button
+                                onClick={() => setSelectedGroupSummary(null)}
+                                className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100"
+                            >
+                                <Users size={14} />
+                            </button>
+                            <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
+
+                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight mb-1 pr-6 truncate">
+                                {selectedGroupSummary.key}
+                            </h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Performance Summary</p>
+
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-medium text-slate-500">Total Purchased</span>
+                                    <span className="text-sm font-bold text-slate-800">${parseFloat(selectedGroupSummary.totalAmount).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-medium text-slate-500">Total Paid</span>
+                                    <span className="text-sm font-bold text-emerald-600">${parseFloat(selectedGroupSummary.totalPaid).toLocaleString()}</span>
+                                </div>
+                                <div className="h-px bg-slate-100 my-1"></div>
+                                <div className="flex justify-between items-center bg-rose-50 p-2 rounded-lg -mx-2">
+                                    <span className="text-xs font-bold text-rose-700">Total Due</span>
+                                    <span className="text-base font-black text-rose-600">${parseFloat(selectedGroupSummary.totalDue).toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center pt-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Diamonds Count</span>
+                                    <span className="text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-full">{selectedGroupSummary.count}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -6,6 +6,7 @@ const LedgerTable = ({
     columns = [],
     loading = false,
     emptyMessage = "No records found.",
+    onGroupClick = null
 }) => {
     const [expanded, setExpanded] = useState({});
 
@@ -22,6 +23,12 @@ const LedgerTable = ({
 
     if (loading) return <div className="p-12 text-center text-slate-400 animate-pulse font-medium">Loading ledger data...</div>;
     if (!data || data.length === 0) return <div className="p-12 text-center text-slate-400 font-medium">{emptyMessage}</div>;
+
+    const handleGroupToggle = (key, group, e) => {
+        // e.stopPropagation(); // Allow bubbling if needed, but here we control logic
+        toggle(key);
+        if (onGroupClick) onGroupClick(group);
+    };
 
     return (
         <div className="flex flex-col h-full bg-white shadow-sm rounded-lg overflow-hidden border border-slate-200">
@@ -49,8 +56,8 @@ const LedgerTable = ({
                                 <Fragment key={`g-${groupIdx}`}>
                                     {/* LEVEL 1: GROUP ROW (Seller or Staff) */}
                                     <tr
-                                        className="bg-slate-50 hover:bg-indigo-50/30 cursor-pointer transition-colors border-b border-slate-200"
-                                        onClick={() => toggle(`g-${groupIdx}`)}
+                                        className="bg-slate-50 hover:bg-indigo-50/30 cursor-pointer transition-colors border-b border-slate-200 group-header"
+                                        onClick={(e) => handleGroupToggle(`g-${groupIdx}`, group, e)}
                                     >
                                         <td className="px-4 py-2 border-r border-slate-200 text-center">
                                             {isGroupExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -58,7 +65,7 @@ const LedgerTable = ({
                                         <td colSpan={visibleColumns.length} className="px-4 py-2">
                                             <div className="flex items-center justify-between w-full">
                                                 <div className="flex items-center gap-3">
-                                                    <span className="font-black text-slate-700 text-sm uppercase">{group.key}</span>
+                                                    <span className="font-black text-slate-700 text-sm uppercase group-hover:text-indigo-600 transition-colors">{group.key}</span>
                                                     <span className="text-[10px] font-bold bg-white text-slate-500 border border-slate-200 px-2 py-0.5 rounded-full">
                                                         {group.count} Items
                                                     </span>

@@ -13,29 +13,63 @@ const ExcelGrid = ({
     onRowClick = null,
     loading = false,
     emptyMessage = "No data available",
-    groupBy = null // key to group by
+    groupBy = null, // key to group by
+    gridId = null, // unique ID for persistence
+    onColumnVisibilityChange = null // callback for visibility changes
 }) => {
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-    // Column Visibility State (Initialize with all columns visible)
-    const [visibleColumns, setVisibleColumns] = useState(
-        columns.reduce((acc, col) => ({ ...acc, [col.key]: !col.hidden }), {})
-    );
+    // Column Visibility State
+    const [visibleColumns, setVisibleColumns] = useState(() => {
+        // Try to load from localStorage if gridId is provided
+        if (gridId) {
+            try {
+                const saved = localStorage.getItem(`grid_cols_${gridId}`);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // Merge saved preferences with current columns to handle schema changes
+                    // If a column is in 'columns' but not in 'parsed', default to !hidden
+                    // If a column is in 'parsed', use that value
+                    const initial = columns.reduce((acc, col) => ({ ...acc, [col.key]: !col.hidden }), {});
+                    return { ...initial, ...parsed };
+                }
+            } catch (error) {
+                console.error("Failed to load grid columns preference:", error);
+            }
+        }
+        // Default initialization
+        return columns.reduce((acc, col) => ({ ...acc, [col.key]: !col.hidden }), {});
+    });
+
     const [showColMenu, setShowColMenu] = useState(false);
 
     // Group Expansion State
     const [expandedGroups, setExpandedGroups] = useState({});
 
-    // Sync when columns prop changes
+    // Sync when columns prop changes (only for new columns)
     useEffect(() => {
         setVisibleColumns(prev => {
             const next = { ...prev };
+            let changed = false;
             columns.forEach(col => {
-                if (next[col.key] === undefined) next[col.key] = !col.hidden;
+                if (next[col.key] === undefined) {
+                    next[col.key] = !col.hidden;
+                    changed = true;
+                }
             });
-            return next;
+            return changed ? next : prev;
         });
     }, [columns]);
+
+    // Save to localStorage and notify parent when visibleColumns changes
+    useEffect(() => {
+        if (gridId) {
+            localStorage.setItem(`grid_cols_${gridId}`, JSON.stringify(visibleColumns));
+        }
+        if (onColumnVisibilityChange) {
+            onColumnVisibilityChange(visibleColumns);
+        }
+    }, [visibleColumns, gridId, onColumnVisibilityChange]);
 
     const handleSort = (columnKey) => {
         setSortConfig(prev => ({
@@ -68,9 +102,9 @@ const ExcelGrid = ({
         });
     }, [data, sortConfig, columns]);
 
-    const formatCellValue = (value, column) => {
+    const formatCellValue = (value, column, row) => {
         if (value == null || value === '') return '-';
-        if (column.format) return column.format(value); // Custom formatter
+        if (column.format) return column.format(value, row); // Custom formatter
         switch (column.type) {
             case 'currency': return `$${parseFloat(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             case 'number': return parseFloat(value).toLocaleString();
@@ -166,7 +200,7 @@ const ExcelGrid = ({
                     className={`px-3 py-1.5 text-xs font-medium text-slate-700 border-b border-r border-slate-100 whitespace-nowrap ${col.className || ''}`}
                     style={{ textAlign: col.type === 'number' || col.type === 'currency' ? 'right' : 'left' }}
                 >
-                    {formatCellValue(row[col.key], col)}
+                    {formatCellValue(row[col.key], col, row)}
                 </td>
             ))}
         </tr>

@@ -3,7 +3,7 @@ module.exports = (sequelize, Sequelize) => {
         name: {
             type: Sequelize.STRING,
             allowNull: false,
-            unique: true
+            allowNull: false
         },
         created_by: {
             type: Sequelize.INTEGER
