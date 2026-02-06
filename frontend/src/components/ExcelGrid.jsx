@@ -103,8 +103,8 @@ const ExcelGrid = ({
     }, [data, sortConfig, columns]);
 
     const formatCellValue = (value, column, row) => {
+        if (column.format) return column.format(value, row); // Custom formatter takes precedence
         if (value == null || value === '') return '-';
-        if (column.format) return column.format(value, row); // Custom formatter
         switch (column.type) {
             case 'currency': return `$${parseFloat(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
             case 'number': return parseFloat(value).toLocaleString();
@@ -265,26 +265,61 @@ const ExcelGrid = ({
                         )}
 
                         {!loading && groupBy && groupedData && (
-                            Object.entries(groupedData).map(([groupName, items]) => (
-                                <React.Fragment key={groupName}>
-                                    <tr
-                                        className="bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors"
-                                        onClick={() => toggleGroup(groupName)}
-                                    >
-                                        <td
-                                            colSpan={Object.values(visibleColumns).filter(Boolean).length + 1}
-                                            className="px-4 py-1.5 border-b border-indigo-100/50 sticky left-0 z-10 bg-slate-100"
+                            Object.entries(groupedData).map(([groupName, items]) => {
+                                // Calculate Group Totals
+                                const groupTotals = columns.reduce((acc, col) => {
+                                    if (col.aggregate === 'sum') {
+                                        acc[col.key] = items.reduce((sum, row) => sum + (parseFloat(row[col.key]) || 0), 0);
+                                    }
+                                    return acc;
+                                }, {});
+
+                                return (
+                                    <React.Fragment key={groupName}>
+                                        <tr
+                                            className="bg-slate-100 cursor-pointer hover:bg-slate-200/80 transition-colors"
+                                            onClick={() => toggleGroup(groupName)}
                                         >
-                                            <div className="flex items-center gap-2">
-                                                <ChevronRight size={14} className={`text-slate-500 transition-transform ${expandedGroups[groupName] ? 'rotate-90' : ''}`} />
-                                                <span className="text-secondary text-xs font-bold uppercase tracking-wider text-slate-500">{groupName}</span>
-                                                <span className="bg-white text-[10px] font-bold text-indigo-600 px-2 py-0.5 rounded-full border border-slate-200 shadow-sm">{items.length}</span>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {expandedGroups[groupName] && renderRows(items)}
-                                </React.Fragment>
-                            ))
+                                            <td
+                                                colSpan={Object.values(visibleColumns).filter(Boolean).length + 1}
+                                                className="px-4 py-1.5 border-b border-indigo-100/50 sticky left-0 z-10 bg-slate-100"
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-2 min-w-[200px]">
+                                                        <ChevronRight size={14} className={`text-slate-500 transition-transform ${expandedGroups[groupName] ? 'rotate-90' : ''}`} />
+                                                        <span className="text-secondary text-xs font-bold uppercase tracking-wider text-slate-500 truncate">{groupName}</span>
+                                                        <span className="bg-white text-[10px] font-bold text-indigo-600 px-2 py-0.5 rounded-full border border-slate-200 shadow-sm">{items.length}</span>
+                                                    </div>
+
+                                                    {/* Group Aggregates */}
+                                                    <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+                                                        {columns.map(col => {
+                                                            if (col.aggregate === 'sum' && groupTotals[col.key] !== undefined) {
+                                                                const isCurrency = col.type === 'currency';
+                                                                const val = groupTotals[col.key];
+
+                                                                // Optional: Don't show 0 sums
+                                                                if (val === 0) return null;
+
+                                                                return (
+                                                                    <div key={col.key} className="flex items-center gap-1.5 px-2 py-0.5 bg-white border border-slate-200 rounded-md shadow-sm whitespace-nowrap">
+                                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">{col.label}:</span>
+                                                                        <span className={`text-[10px] font-bold ${col.key.includes('due') ? 'text-rose-600' : (col.key.includes('paid') ? 'text-emerald-600' : 'text-slate-700')}`}>
+                                                                            {isCurrency ? '$' : ''}{val.toLocaleString(undefined, { minimumFractionDigits: isCurrency ? 0 : 2, maximumFractionDigits: 2 })}
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            }
+                                                            return null;
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {expandedGroups[groupName] && renderRows(items)}
+                                    </React.Fragment>
+                                );
+                            })
                         )}
 
                         {!loading && !groupBy && renderRows(sortedData)}

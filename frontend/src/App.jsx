@@ -7,7 +7,7 @@ import Invoices from './pages/Invoices';
 import InvoiceForm from './pages/InvoiceForm';
 import InvoiceReports from './pages/InvoiceReports';
 import SalesHistory from './pages/SalesHistory';
-import StaffManagement from './pages/StaffManagement';
+import ReadingManagement from './pages/ReadingManagement';
 import SellerList from './pages/SellerList';
 import SellerDetails from './pages/SellerDetails';
 import SellerReports from './pages/SellerReports';
@@ -31,7 +31,7 @@ const App = () => {
             <Route path="/login" element={<Login />} />
 
             <Route path="/" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="dashboard_view">
                 <MainLayout>
                   <Dashboard />
                 </MainLayout>
@@ -39,7 +39,7 @@ const App = () => {
             } />
 
             <Route path="/inventory" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="inventory_manage">
                 <MainLayout>
                   <Inventory />
                 </MainLayout>
@@ -47,7 +47,7 @@ const App = () => {
             } />
 
             <Route path="/invoices" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="invoice_manage">
                 <MainLayout>
                   <Invoices />
                 </MainLayout>
@@ -55,7 +55,7 @@ const App = () => {
             } />
 
             <Route path="/invoices/create" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="invoice_manage">
                 <MainLayout>
                   <InvoiceForm />
                 </MainLayout>
@@ -63,7 +63,7 @@ const App = () => {
             } />
 
             <Route path="/invoices/reports" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="invoice_manage">
                 <MainLayout>
                   <InvoiceReports />
                 </MainLayout>
@@ -72,7 +72,7 @@ const App = () => {
 
 
             <Route path="/history" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="dashboard_view">
                 <MainLayout>
                   <SalesHistory />
                 </MainLayout>
@@ -80,7 +80,7 @@ const App = () => {
             } />
 
             <Route path="/sellers" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="seller_manage">
                 <MainLayout>
                   <SellerList />
                 </MainLayout>
@@ -88,7 +88,7 @@ const App = () => {
             } />
 
             <Route path="/sellers/:id" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="seller_manage">
                 <MainLayout>
                   <SellerDetails />
                 </MainLayout>
@@ -96,7 +96,7 @@ const App = () => {
             } />
 
             <Route path="/sellers/reports" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="seller_manage">
                 <MainLayout>
                   <SellerReports />
                 </MainLayout>
@@ -104,7 +104,7 @@ const App = () => {
             } />
 
             <Route path="/sellers/sales-grid" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="seller_manage">
                 <MainLayout>
                   <SellerBuyerGrid />
                 </MainLayout>
@@ -112,7 +112,7 @@ const App = () => {
             } />
 
             <Route path="/sellers/grid-report" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="seller_manage">
                 <MainLayout>
                   <SellerReportGrid />
                 </MainLayout>
@@ -120,15 +120,15 @@ const App = () => {
             } />
 
             <Route path="/staff" element={
-              <ProtectedRoute>
-                <StaffManagement />
+              <ProtectedRoute permission="admin_only">
+                <ReadingManagement />
               </ProtectedRoute>
             } />
 
 
 
             <Route path="/invoices/:id/print" element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="invoice_manage">
                 <InvoicePrint />
               </ProtectedRoute>
             } />

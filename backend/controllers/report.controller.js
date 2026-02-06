@@ -9,14 +9,30 @@ exports.getDashboardStats = async (req, res) => {
     try {
         const diamondFilter = { status: 'in_stock' };
         const invoiceFilter = {};
+        const soldCondition = { status: 'sold' };
 
-        if (req.userRole === 'admin' && req.query.staffId) {
-            const staffId = parseInt(req.query.staffId);
-            diamondFilter.created_by = staffId;
-            invoiceFilter.created_by = staffId;
-        } else if (req.userRole === 'staff') {
+        // RBAC Logic
+        let canViewAll = false;
+        if (req.userRole === 'admin') {
+            canViewAll = true;
+        } else {
+            const userRef = await db.admins.findByPk(req.userId);
+            canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+        }
+
+        if (canViewAll) {
+            // Admin or Permitted Staff
+            if (req.query.staffId) {
+                const staffId = parseInt(req.query.staffId);
+                diamondFilter.created_by = staffId;
+                invoiceFilter.created_by = staffId;
+                soldCondition.created_by = staffId;
+            }
+        } else {
+            // Restricted Staff
             diamondFilter.created_by = req.userId;
             invoiceFilter.created_by = req.userId;
+            soldCondition.created_by = req.userId;
         }
 
         const inventoryRes = await Diamond.findAll({
@@ -27,12 +43,6 @@ exports.getDashboardStats = async (req, res) => {
         const inventoryValue = inventoryRes[0].totalValue || 0;
         const inventoryCount = await Diamond.count({ where: diamondFilter });
 
-        const soldCondition = { status: 'sold' };
-        if (req.userRole === 'admin' && req.query.staffId) {
-            soldCondition.created_by = parseInt(req.query.staffId);
-        } else if (req.userRole === 'staff') {
-            soldCondition.created_by = req.userId;
-        }
         const soldCount = await Diamond.count({ where: soldCondition });
 
         const financials = await Invoice.findAll({
@@ -110,7 +120,16 @@ exports.getReports = async (req, res) => {
         ];
 
         const whereClause = {};
-        if (req.userRole === 'staff') {
+
+        let canViewAll = false;
+        if (req.userRole === 'admin') {
+            canViewAll = true;
+        } else {
+            const userRef = await db.admins.findByPk(req.userId);
+            canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+        }
+
+        if (!canViewAll) {
             whereClause.created_by = req.userId;
         }
         if (startDate && endDate) {
@@ -138,7 +157,15 @@ exports.getTopSellingItems = async (req, res) => {
         const InvoiceItem = db.invoiceItems;
 
         let staffFilter = "";
-        if (req.userRole === 'staff') {
+        let canViewAll = false;
+        if (req.userRole === 'admin') {
+            canViewAll = true;
+        } else {
+            const userRef = await db.admins.findByPk(req.userId);
+            canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+        }
+
+        if (!canViewAll) {
             staffFilter = `JOIN invoices i ON ii.invoiceId = i.id WHERE i.created_by = ${req.userId}`;
         }
 
@@ -202,7 +229,16 @@ exports.getBuyingStats = async (req, res) => {
         ];
 
         const whereClause = {};
-        if (req.userRole === 'staff') {
+
+        let canViewAll = false;
+        if (req.userRole === 'admin') {
+            canViewAll = true;
+        } else {
+            const userRef = await db.admins.findByPk(req.userId);
+            canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+        }
+
+        if (!canViewAll) {
             whereClause.created_by = req.userId;
         }
 
@@ -221,10 +257,18 @@ exports.getBuyingStats = async (req, res) => {
 };
 
 // Helper function to apply RBAC filters
-const applyInvoiceRBAC = (whereClause, req) => {
-    if (req.userRole === 'staff') {
+const applyInvoiceRBAC = async (whereClause, req) => {
+    let canViewAll = false;
+    if (req.userRole === 'admin') {
+        canViewAll = true;
+    } else {
+        const userRef = await db.admins.findByPk(req.userId);
+        canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+    }
+
+    if (!canViewAll) {
         whereClause.created_by = req.userId;
-    } else if (req.userRole === 'admin' && req.query.staffId) {
+    } else if (req.query.staffId) {
         whereClause.created_by = parseInt(req.query.staffId);
     }
     return whereClause;
@@ -234,7 +278,7 @@ const applyInvoiceRBAC = (whereClause, req) => {
 exports.invoicesByCompany = async (req, res) => {
     try {
         let whereClause = {};
-        whereClause = applyInvoiceRBAC(whereClause, req);
+        whereClause = await applyInvoiceRBAC(whereClause, req);
 
         const invoices = await Invoice.findAll({
             where: whereClause,
@@ -281,7 +325,7 @@ exports.invoicesByCompany = async (req, res) => {
 exports.invoicesByBuyer = async (req, res) => {
     try {
         let whereClause = {};
-        whereClause = applyInvoiceRBAC(whereClause, req);
+        whereClause = await applyInvoiceRBAC(whereClause, req);
 
         const invoices = await Invoice.findAll({
             where: whereClause,
@@ -328,8 +372,17 @@ exports.invoicesByBuyer = async (req, res) => {
 // Staff-wise Invoice Report
 exports.invoicesByStaff = async (req, res) => {
     try {
-        let whereClause = {};
-        if (req.userRole === 'staff') {
+        const whereClause = {};
+
+        let canViewAll = false;
+        if (req.userRole === 'admin') {
+            canViewAll = true;
+        } else {
+            const userRef = await db.admins.findByPk(req.userId);
+            canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+        }
+
+        if (!canViewAll) {
             whereClause.created_by = req.userId;
         }
 
@@ -385,7 +438,7 @@ exports.invoicesByStaff = async (req, res) => {
 exports.invoicesByDate = async (req, res) => {
     try {
         let whereClause = {};
-        whereClause = applyInvoiceRBAC(whereClause, req);
+        whereClause = await applyInvoiceRBAC(whereClause, req);
 
         if (req.query.startDate && req.query.endDate) {
             whereClause.invoice_date = {
@@ -443,7 +496,7 @@ exports.invoicesByDate = async (req, res) => {
 exports.invoicesByCurrency = async (req, res) => {
     try {
         let whereClause = {};
-        whereClause = applyInvoiceRBAC(whereClause, req);
+        whereClause = await applyInvoiceRBAC(whereClause, req);
 
         const invoices = await Invoice.findAll({
             where: whereClause,
@@ -494,7 +547,7 @@ exports.invoicesByCurrency = async (req, res) => {
 exports.invoicesByGST = async (req, res) => {
     try {
         let whereClause = { currency: 'INR' };
-        whereClause = applyInvoiceRBAC(whereClause, req);
+        whereClause = await applyInvoiceRBAC(whereClause, req);
 
         const invoices = await Invoice.findAll({
             where: whereClause,
@@ -683,7 +736,15 @@ exports.getSellerBuyerSales = async (req, res) => {
         }
 
         // RBAC / Staff Filter
-        if (req.userRole === 'staff') {
+        let canViewAll = false;
+        if (req.userRole === 'admin') {
+            canViewAll = true;
+        } else {
+            const userRef = await db.admins.findByPk(req.userId);
+            canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+        }
+
+        if (!canViewAll) {
             invoiceWhere.created_by = req.userId;
         } else if (staffId) {
             invoiceWhere.created_by = staffId;
@@ -864,6 +925,12 @@ exports.getSellerGridReport = async (req, res) => {
             if (maxAmount) whereClause.buy_price[Op.lte] = parseFloat(maxAmount);
         }
 
+        // Determine Sorting
+        let orderClause = [['buy_date', 'DESC'], ['id', 'DESC']];
+        if (status && (String(status).toLowerCase().includes('due') || String(status).toLowerCase().includes('partial'))) {
+            orderClause = [['payment_due_date', 'ASC'], ['id', 'DESC']];
+        }
+
         // Fetch Data
         const diamonds = await Diamond.findAll({
             where: whereClause,
@@ -871,7 +938,7 @@ exports.getSellerGridReport = async (req, res) => {
                 { model: db.sellers, as: 'seller', attributes: ['id', 'name'] },
                 { model: db.admins, as: 'creator', attributes: ['id', 'name'] }
             ],
-            order: [['buy_date', 'DESC'], ['id', 'DESC']]
+            order: orderClause
         });
 
         const today = new Date();
@@ -920,6 +987,7 @@ exports.getSellerGridReport = async (req, res) => {
                 paid_amount: paidAmount,
                 due_amount: dueAmount > 0 ? dueAmount : 0,
                 due_status: dueStatus,
+                payment_due_date: d.payment_due_date,
                 days_outstanding: daysOutstanding,
                 notes: d.comments || '' // Utilizing comments as notes
             };

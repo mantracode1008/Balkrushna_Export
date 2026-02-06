@@ -146,8 +146,21 @@ const Login = () => {
             // 2. If Admin not found (404), try Staff Login
             if (adminErr.response && adminErr.response.status === 404) {
                 try {
-                    await authService.loginStaff(identity, secret);
-                    navigate('/');
+                    const response = await authService.loginStaff(identity, secret);
+
+                    // Intelligent Redirect based on Permissions
+                    const perms = response.permissions || {};
+                    if (perms.dashboard_view) {
+                        navigate('/');
+                    } else if (perms.inventory_manage) {
+                        navigate('/inventory');
+                    } else if (perms.seller_manage) {
+                        navigate('/sellers');
+                    } else if (perms.invoice_manage) {
+                        navigate('/invoices');
+                    } else {
+                        navigate('/');
+                    }
                 } catch (staffErr) {
                     // Staff also failed (or not found)
                     setError(staffErr.response?.data?.message || "Authentication Failed");

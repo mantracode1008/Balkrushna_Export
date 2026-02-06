@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import diamondService from '../services/diamond.service';
 import authService from '../services/auth.service';
 import XLSX from 'xlsx-js-style';
@@ -11,6 +12,7 @@ import ExcelGrid from '../components/ExcelGrid';
 import { getShapeDisplay } from '../utils/shapeUtils';
 
 const Inventory = () => {
+    const navigate = useNavigate();
     const [diamonds, setDiamonds] = useState([]);
     const [loading, setLoading] = useState(false);
     const [companies, setCompanies] = useState([]);
@@ -297,6 +299,12 @@ const Inventory = () => {
                     <CheckCircle size={14} /> {selectedIds.length} Selected
                 </div>
                 <div className="flex gap-2 w-full sm:w-auto">
+                    <button onClick={() => {
+                        const selectedData = diamonds.filter(d => selectedIds.includes(d.id));
+                        navigate('/invoices/create', { state: { selectedDiamonds: selectedData } });
+                    }} className="flex-1 sm:flex-none justify-center px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-blue-700 flex items-center gap-1">
+                        <div className="flex items-center gap-1"><Plus size={12} /> Invoice</div>
+                    </button>
                     <button onClick={() => setShowSalesModal(true)} className="flex-1 sm:flex-none justify-center px-3 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-emerald-700 flex items-center gap-1">
                         <DollarSign size={12} /> Sell
                     </button>

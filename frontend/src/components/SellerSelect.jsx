@@ -33,7 +33,7 @@ const SellerSelect = ({ value, onChange, placeholder = "Select Seller", showCrea
             onChange(created.id, created);
             setIsCreating(false);
             setNewSeller({ name: '', company: '', mobile: '', email: '', gst_no: '' });
-            setIsOpen(false);
+            // setIsOpen(false); // Keep open to show selection
             if (onCloseCreateForm) onCloseCreateForm();
         } catch (err) {
             console.error(err);

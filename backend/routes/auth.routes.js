@@ -29,4 +29,5 @@ module.exports = function (app) {
     app.get("/api/auth/staff", [verifyToken], controller.getAllStaff);
     app.delete("/api/auth/staff/:id", [verifyToken], controller.deleteStaff);
     app.post("/api/auth/update-staff-pin", [verifyToken], controller.updateStaffPin);
+    app.post("/api/auth/update-staff-permissions", [verifyToken], controller.updateStaffPermissions);
 };

@@ -8,8 +8,22 @@ const StaffManagement = () => {
     const [loading, setLoading] = useState(true);
     const [showAddForm, setShowAddForm] = useState(false);
     const [showResetModal, setShowResetModal] = useState(false);
-    const [formData, setFormData] = useState({ name: '', mobile: '', address: '', pin: '' });
+    const [showPermissionModal, setShowPermissionModal] = useState(false);
+    const [formData, setFormData] = useState({
+        name: '',
+        mobile: '',
+        address: '',
+        pin: '',
+        permissions: {
+            inventory_manage: false,
+            seller_manage: false,
+            invoice_manage: false,
+            dashboard_view: false,
+            view_all_data: false
+        }
+    });
     const [resetData, setResetData] = useState({ id: null, name: '', newPin: '' });
+    const [permissionData, setPermissionData] = useState({ id: null, name: '', permissions: {} });
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [deletingId, setDeletingId] = useState(null);
@@ -40,10 +54,13 @@ const StaffManagement = () => {
             return;
         }
         try {
-            const res = await authService.createStaff(formData.name, formData.mobile, formData.pin, formData.address);
+            const res = await authService.createStaff(formData.name, formData.mobile, formData.pin, formData.address, formData.permissions);
             setSuccess(`Staff Created! ID: ${res.data.staff_id}`);
             setShowAddForm(false);
-            setFormData({ name: '', mobile: '', address: '', pin: '' });
+            setFormData({
+                name: '', mobile: '', address: '', pin: '',
+                permissions: { inventory_manage: false, seller_manage: false, invoice_manage: false, dashboard_view: false, view_all_data: false }
+            });
             fetchStaff();
             setTimeout(() => setSuccess(''), 5000);
         } catch (err) {
@@ -116,7 +133,7 @@ const StaffManagement = () => {
     );
 
     return (
-        <MainLayout>
+        <>
             <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
 
                 {/* Header Section */}
@@ -249,6 +266,20 @@ const StaffManagement = () => {
                                                         <Key className="w-4 h-4" />
                                                     </button>
                                                     <button
+                                                        onClick={() => {
+                                                            setPermissionData({
+                                                                id: user.id,
+                                                                name: user.name,
+                                                                permissions: user.permissions || {}
+                                                            });
+                                                            setShowPermissionModal(true);
+                                                        }}
+                                                        className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                                                        title="Manage Permissions"
+                                                    >
+                                                        <Shield className="w-4 h-4" />
+                                                    </button>
+                                                    <button
                                                         onClick={() => handleDelete(user.id)}
                                                         disabled={deletingId === user.id}
                                                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -273,6 +304,7 @@ const StaffManagement = () => {
 
             {/* Modal for Reset PIN */}
             {showResetModal && (
+                // ... existing reset modal ...
                 <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden border border-slate-100">
                         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -299,6 +331,66 @@ const StaffManagement = () => {
                                 <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-md shadow-indigo-200 text-sm">Update PIN</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal for Manage Permissions */}
+            {showPermissionModal && (
+                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100">
+                        <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                            <h2 className="text-lg font-bold text-slate-800">Manage Permissions</h2>
+                            <button onClick={() => setShowPermissionModal(false)} className="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-sm text-slate-600">Update access levels for <strong>{permissionData.name}</strong>.</p>
+
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-1 gap-2">
+                                    {[
+                                        { key: 'inventory_manage', label: 'Manage Diamond Inventory' },
+                                        { key: 'seller_manage', label: 'Manage Seller Section' },
+                                        { key: 'invoice_manage', label: 'Manage Invoices' },
+                                        { key: 'dashboard_view', label: 'View Dashboard' },
+                                        { key: 'view_all_data', label: 'View Admin Data (See Everything)', color: 'text-rose-600' }
+                                    ].map(perm => (
+                                        <label key={perm.key} className="flex items-center gap-3 cursor-pointer p-3 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                                                checked={permissionData.permissions[perm.key] || false}
+                                                onChange={(e) => setPermissionData({
+                                                    ...permissionData,
+                                                    permissions: { ...permissionData.permissions, [perm.key]: e.target.checked }
+                                                })}
+                                            />
+                                            <span className={`text-sm font-bold ${perm.color || 'text-slate-700'}`}>{perm.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button type="button" onClick={() => setShowPermissionModal(false)} className="flex-1 px-4 py-2.5 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors text-sm">Cancel</button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            await authService.updateStaffPermissions(permissionData.id, permissionData.permissions);
+                                            setSuccess(`Permissions updated for ${permissionData.name}`);
+                                            setShowPermissionModal(false);
+                                            fetchStaff();
+                                            setTimeout(() => setSuccess(''), 3000);
+                                        } catch (err) {
+                                            setError("Failed to update permissions");
+                                        }
+                                    }}
+                                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-md shadow-indigo-200 text-sm"
+                                >
+                                    Save Changes
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -355,6 +447,32 @@ const StaffManagement = () => {
                                 <p className="text-[10px] text-slate-400">Used for login authentication.</p>
                             </div>
 
+                            <div className="space-y-2 pt-2 border-t border-slate-100">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Access Permissions</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { key: 'inventory_manage', label: 'Manage Inventory' },
+                                        { key: 'seller_manage', label: 'Manage Sellers' },
+                                        { key: 'invoice_manage', label: 'Manage Invoices' },
+                                        { key: 'dashboard_view', label: 'View Dashboard' },
+                                        { key: 'view_all_data', label: 'View Admin Data', color: 'text-rose-600' }
+                                    ].map(perm => (
+                                        <label key={perm.key} className="flex items-center gap-2 cursor-pointer p-2 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                                                checked={formData.permissions[perm.key] || false}
+                                                onChange={(e) => setFormData({
+                                                    ...formData,
+                                                    permissions: { ...formData.permissions, [perm.key]: e.target.checked }
+                                                })}
+                                            />
+                                            <span className={`text-xs font-bold ${perm.color || 'text-slate-600'}`}>{perm.label}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="flex gap-3 pt-4">
                                 <button type="button" onClick={() => setShowAddForm(false)} className="flex-1 px-4 py-2.5 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors text-sm">Cancel</button>
                                 <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg font-bold shadow-md shadow-indigo-200 text-sm">Create Account</button>
@@ -363,7 +481,7 @@ const StaffManagement = () => {
                     </div>
                 </div>
             )}
-        </MainLayout>
+        </>
     );
 };
 

@@ -32,7 +32,17 @@ exports.create = async (req, res) => {
 exports.findAll = async (req, res) => {
     try {
         const name = req.query.name;
-        var condition = name ? { name: { [Op.like]: `%${name}%` } } : null;
+        var condition = name ? { name: { [Op.like]: `%${name}%` } } : {};
+
+        // RBAC: Check Permissions
+        if (req.userRole !== 'admin') {
+            const userRef = await db.admins.findByPk(req.userId);
+            const canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+
+            if (!canViewAll) {
+                condition.created_by = req.userId;
+            }
+        }
 
         const sellers = await Seller.findAll({
             where: condition,

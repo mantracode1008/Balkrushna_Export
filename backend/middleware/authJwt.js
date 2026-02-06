@@ -24,7 +24,16 @@ verifyToken = (req, res, next) => {
     });
 };
 
+isAdmin = (req, res, next) => {
+    if (req.userRole === "admin") {
+        next();
+        return;
+    }
+    res.status(403).send({ message: "Require Admin Role!" });
+};
+
 const authJwt = {
-    verifyToken: verifyToken
+    verifyToken: verifyToken,
+    isAdmin: isAdmin
 };
 module.exports = authJwt;

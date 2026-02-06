@@ -11,8 +11,8 @@ const verifyPin = (pin, mobile) => {
         });
 };
 
-const createStaff = (name, mobile, pin) => {
-    return api.post("/auth/staff", { name, mobile, pin });
+const createStaff = (name, mobile, pin, address, permissions) => {
+    return api.post("/auth/staff", { name, mobile, pin, address, permissions });
 };
 
 const getAllStaff = () => {
@@ -79,7 +79,8 @@ const authService = {
     getAllStaff,
     deleteStaff,
     updateSelf: (id, newPin, newPassword) => api.post("/auth/update-self", { id, newPin, newPassword }),
-    updateStaffPin: (staffId, newPin) => api.post("/auth/update-staff-pin", { staffId, newPin })
+    updateStaffPin: (staffId, newPin) => api.post("/auth/update-staff-pin", { staffId, newPin }),
+    updateStaffPermissions: (staffId, permissions) => api.post("/auth/update-staff-permissions", { staffId, permissions })
 };
 
 export default authService;

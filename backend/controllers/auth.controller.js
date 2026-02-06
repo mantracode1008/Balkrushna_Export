@@ -82,7 +82,7 @@ exports.verifyPin = async (req, res) => {
 
 // 4. Create Staff
 exports.createStaff = async (req, res) => {
-    const { name, mobile, pin, address } = req.body;
+    const { name, mobile, pin, address, permissions } = req.body;
     if (!name || !mobile || !pin) return res.status(400).send({ message: "Name, Mobile, and PIN required" });
 
     // Validate PIN length (User requested 4 digits for staff)
@@ -100,17 +100,15 @@ exports.createStaff = async (req, res) => {
         const pinHash = bcrypt.hashSync(pin, 8);
 
         // Generate Unique Staff ID: First Letter + Last 2 Digits of Mobile
-        // e.g. Name: Raj, Mobile: ...02 -> r02
         const firstLetter = name.trim().charAt(0).toLowerCase();
         const lastTwoDigits = mobile.slice(-2);
         let staff_id = `${firstLetter}${lastTwoDigits}`;
 
-        // Ensure Uniqueness (append 'a', 'b', etc. if taken)
+        // Ensure Uniqueness
         let attempt = 0;
         let unique_staff_id = staff_id;
         while (await Admin.findOne({ where: { staff_id: unique_staff_id } })) {
             attempt++;
-            // Use a simple suffix system: r02, r02a, r02b...
             const suffixes = 'abcdefghijklmnopqrstuvwxyz';
             if (attempt <= 26) {
                 unique_staff_id = `${staff_id}${suffixes[attempt - 1]}`;
@@ -127,7 +125,8 @@ exports.createStaff = async (req, res) => {
             staff_id,
             pin: pinHash,
             role: 'staff',
-            failed_attempts: 0
+            failed_attempts: 0,
+            permissions: permissions || {}
         });
 
         res.status(201).send({
@@ -147,10 +146,27 @@ exports.getAllStaff = async (req, res) => {
     try {
         const staff = await Admin.findAll({
             // Fetch ALL users (Staff + Admin) so Admin can filter by anyone
-            attributes: ['id', 'name', 'mobile', 'address', 'staff_id', 'role', 'createdAt', 'failed_attempts'],
+            attributes: ['id', 'name', 'mobile', 'address', 'staff_id', 'role', 'createdAt', 'failed_attempts', 'permissions'],
             order: [['createdAt', 'DESC']]
         });
         res.status(200).send(staff);
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
+};
+
+// 9. Update Staff Permissions
+exports.updateStaffPermissions = async (req, res) => {
+    const { staffId, permissions } = req.body;
+
+    try {
+        const staff = await Admin.findByPk(staffId);
+        if (!staff) return res.status(404).send({ message: "Staff member not found." });
+
+        staff.permissions = permissions;
+        await staff.save();
+
+        res.status(200).send({ message: "Permissions updated successfully." });
     } catch (err) {
         res.status(500).send({ message: err.message });
     }
@@ -337,6 +353,7 @@ exports.loginStaff = async (req, res) => {
             name: staff.name,
             staff_id: staff.staff_id, // Return ID
             role: staff.role,
+            permissions: staff.permissions, // Include permissions
             accessToken: token,
             message: "Login Successful"
         });

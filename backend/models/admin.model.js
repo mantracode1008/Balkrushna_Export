@@ -59,6 +59,10 @@ module.exports = (sequelize, Sequelize) => {
         lock_until: {
             type: Sequelize.DATE,
             allowNull: true
+        },
+        permissions: {
+            type: Sequelize.JSON,
+            defaultValue: {}
         }
     }, {
         paranoid: true // Enable Soft Deletes

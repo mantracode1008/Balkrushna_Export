@@ -35,13 +35,16 @@ const useSellers = () => {
     const createSeller = useCallback(async (sellerData) => {
         try {
             const response = await sellerService.create(sellerData);
-            // Auto-refresh seller list after creation
-            await fetchSellers();
+            const newSeller = response.data;
+
+            // update local state immediately to reflect changes in UI
+            setSellers(prev => [newSeller, ...prev]);
+
             return response;
         } catch (err) {
             throw err;
         }
-    }, [fetchSellers]);
+    }, []);
 
     // Manual refresh function
     const refreshSellers = useCallback(() => {

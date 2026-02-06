@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import invoiceService from '../services/invoice.service';
 import diamondService from '../services/diamond.service';
 import clientService from '../services/client.service';
@@ -42,10 +42,44 @@ const InvoiceForm = () => {
     // Clients Data
     const [clients, setClients] = useState([]);
 
+    const location = useLocation();
+
     useEffect(() => {
         // Load Clients for dropdown
         clientService.getAll().then(res => setClients(res.data)).catch(err => console.error(err));
-    }, []);
+
+        // Check for incoming diamonds from Inventory
+        if (location.state?.selectedDiamonds) {
+            const items = location.state.selectedDiamonds;
+            // Batch Process to Init State
+            const initItems = items.map(d => {
+                const cost = parseFloat(d.price) || 0;
+                let finalSalePrice = parseFloat(d.price).toFixed(2);
+                let commissionAmt = 0;
+                let commissionRate = 0;
+
+                if (d.sale_price && Number(d.sale_price) > 0) {
+                    finalSalePrice = parseFloat(d.sale_price).toFixed(2);
+                    commissionAmt = (finalSalePrice - cost).toFixed(2);
+                    commissionRate = cost > 0 ? ((commissionAmt / cost) * 100).toFixed(2) : 0;
+                }
+                const ratePerCarat = d.carat > 0 ? (finalSalePrice / d.carat).toFixed(2) : 0;
+
+                return {
+                    ...d,
+                    finalSalePrice,
+                    commissionAmt,
+                    commissionRate,
+                    ratePerCarat,
+                    qty: 1
+                };
+            });
+            setSelectedDiamonds(initItems);
+            // Clear history state to prevent re-adding on refresh? 
+            // Better to leave it so back/forward works?
+            // navigate(location.pathname, { replace: true, state: {} }); // Optional clean up
+        }
+    }, [location.state]);
 
     // Sync Country
     useEffect(() => {

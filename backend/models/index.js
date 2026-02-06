@@ -32,6 +32,7 @@ db.clients = require("./client.model.js")(sequelize, Sequelize);
 db.sellers = require("./seller.model.js")(sequelize, Sequelize);
 db.sellerPayments = require("./sellerPayment.model.js")(sequelize, Sequelize);
 db.sellerPaymentAllocations = require("./sellerPaymentAllocation.model.js")(sequelize, Sequelize);
+db.settings = require("./settings.model.js")(sequelize, Sequelize);
 
 // Associations
 db.invoices.hasMany(db.invoiceItems, { as: "items" });

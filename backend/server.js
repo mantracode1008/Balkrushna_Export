@@ -49,6 +49,7 @@ require("./routes/seller.routes")(app);
 require("./routes/sellerPayment.routes")(app);
 require("./routes/pricing.routes")(app);
 require("./routes/report.routes")(app);
+require("./routes/settings.routes")(app);
 
 const PORT = process.env.PORT || 8080;
 try {

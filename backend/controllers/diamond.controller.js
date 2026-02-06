@@ -65,28 +65,62 @@ exports.checkStatus = async (req, res) => {
     if (!certificate) return res.status(400).send({ message: "Certificate ID required." });
 
     try {
+        let permFilter = {};
+
+        // RBAC: Check Permissions
+        if (req.userRole !== 'admin') {
+            const userRef = await db.admins.findByPk(req.userId);
+            const canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+
+            if (!canViewAll) {
+                // Strict Restriction: Can only check status of OWN items.
+                // This prevents "probing" the system.
+                permFilter = {
+                    [Op.or]: [
+                        { created_by: req.userId },
+                        { sold_by: req.userId }
+                    ]
+                };
+            }
+        }
+
         // Check for SOLD status
         const soldDiamond = await Diamond.findOne({
             where: {
                 certificate: certificate,
-                status: 'sold'
+                status: 'sold',
+                ...permFilter
             }
         });
 
         if (soldDiamond) {
-            return res.send({ exists: true, status: 'sold', diamond: soldDiamond });
+            return res.send({ exists: true, status: 'sold', diamond: filterDiamondFields(soldDiamond) });
         }
 
-        // Check for IN STOCK status (Inventory of ANY staff/admin)
+        // Check for IN STOCK status
         const stockDiamond = await Diamond.findOne({
             where: {
                 certificate: certificate,
-                status: 'in_stock'
+                status: 'in_stock',
+                ...permFilter
             }
         });
 
         if (stockDiamond) {
-            return res.send({ exists: true, status: 'in_stock', diamond: stockDiamond });
+            return res.send({ exists: true, status: 'in_stock', diamond: filterDiamondFields(stockDiamond) });
+        }
+
+        // Check for IN CART or other statuses if needed, or just return false
+        const otherDiamond = await Diamond.findOne({
+            where: {
+                certificate: certificate,
+                status: { [Op.notIn]: ['sold', 'in_stock', 'deleted'] },
+                ...permFilter
+            }
+        });
+
+        if (otherDiamond) {
+            return res.send({ exists: true, status: otherDiamond.status, diamond: filterDiamondFields(otherDiamond) });
         }
 
         // If neither
@@ -334,7 +368,7 @@ exports.create = async (req, res) => {
         });
 };
 
-exports.findAll = (req, res) => {
+exports.findAll = async (req, res) => {
     const {
         certificate, shape, clarity, color, company, seller_id, lab,
         minCarat, maxCarat, minPrice, maxPrice,
@@ -445,16 +479,36 @@ exports.findAll = (req, res) => {
         condition.status = 'in_stock';
     }
 
-    // 5. RBAC: Strict Staff Restriction
-    if (req.userRole === 'admin') {
-        if (req.query.staffId) {
-            condition.created_by = req.query.staffId;
+    // 5. RBAC: Permissions Logic
+    try {
+        if (req.userRole === 'admin') {
+            if (req.query.staffId) {
+                condition.created_by = req.query.staffId;
+            }
+        } else {
+            // Check Permissions
+            const userRef = await db.admins.findByPk(req.userId);
+            const canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+
+            if (canViewAll) {
+                // If they can view all, BUT they specifically want to see only their own (e.g., via a toggle filters),
+                // we could support that. For now, we assume 'view all' means 'no mandatory filter'.
+                // If filtering by specific staff ID is requested (unlikely via UI for staff):
+                if (req.query.staffId) {
+                    condition.created_by = req.query.staffId;
+                }
+            } else {
+                // Strict Restriction
+                condition[Op.or] = [
+                    { created_by: req.userId },
+                    { sold_by: req.userId }
+                ];
+            }
         }
-    } else {
-        condition[Op.or] = [
-            { created_by: req.userId },
-            { sold_by: req.userId }
-        ];
+    } catch (permErr) {
+        console.error("Permission Check Error:", permErr);
+        // Fallback to strict
+        condition.created_by = req.userId;
     }
 
     console.log(`[DEBUG] Final Where Condition:`, JSON.stringify(condition, null, 2));

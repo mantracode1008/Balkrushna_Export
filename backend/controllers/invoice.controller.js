@@ -213,18 +213,34 @@ exports.create = async (req, res) => {
     }
 };
 
-exports.findAll = (req, res) => {
+exports.findAll = async (req, res) => {
     const whereCondition = {};
 
     // RBAC & Filtering
-    if (req.userRole === 'admin') {
-        // Admin: Optional Filter by Staff
-        if (req.query.staffId) {
-            whereCondition.created_by = req.query.staffId;
+    try {
+        if (req.userRole === 'admin') {
+            // Admin: Optional Filter by Staff
+            if (req.query.staffId) {
+                whereCondition.created_by = req.query.staffId;
+            }
+        } else {
+            // Check Permissions
+            const userRef = await db.admins.findByPk(req.userId);
+            const canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+
+            if (canViewAll) {
+                if (req.query.staffId) {
+                    whereCondition.created_by = req.query.staffId;
+                }
+            } else {
+                // Strict restriction
+                whereCondition.created_by = req.userId;
+            }
         }
-    } else {
-        // Staff: Strict restriction to own invoices
-        whereCondition.created_by = req.userId;
+    } catch (e) {
+        console.error("RBAC Check Error", e);
+        // Fallback
+        if (req.userRole !== 'admin') whereCondition.created_by = req.userId;
     }
 
     Invoice.findAll({
@@ -255,26 +271,36 @@ exports.findAll = (req, res) => {
         });
 };
 
-exports.getJwt = (req, res) => {
+const Settings = db.settings;
+
+exports.getJwt = async (req, res) => {
     const id = req.params.id;
-    Invoice.findByPk(id, {
-        include: [{
-            model: InvoiceItem,
-            as: "items",
-            include: [{ model: Diamond, as: "diamond" }]
-        },
-        {
-            model: db.clients,
-            as: "client"
-        }]
-    })
-        .then(invoice => {
-            if (!invoice) return res.status(404).send({ message: "Invoice not found" });
-            pdfGenerator.generateInvoicePDF(invoice, invoice.items, res);
-        })
-        .catch(err => {
-            res.status(500).send({ message: err.message });
+    try {
+        const invoice = await Invoice.findByPk(id, {
+            include: [{
+                model: InvoiceItem,
+                as: "items",
+                include: [{ model: Diamond, as: "diamond" }]
+            },
+            {
+                model: db.clients,
+                as: "client"
+            }]
         });
+
+        if (!invoice) return res.status(404).send({ message: "Invoice not found" });
+
+        const layoutSetting = await Settings.findByPk('invoice_layout');
+        const layout = layoutSetting ? layoutSetting.value : null;
+
+        const companySetting = await Settings.findByPk('company_profile');
+        const companyProfile = companySetting ? companySetting.value : null;
+
+        pdfGenerator.generateInvoicePDF(invoice, invoice.items, res, layout, companyProfile);
+
+    } catch (err) {
+        res.status(500).send({ message: err.message });
+    }
 };
 
 // Delete single invoice
@@ -456,7 +482,11 @@ exports.exportExcel = async (req, res) => {
 
         // RBAC
         if (req.userRole === 'staff') {
-            whereCondition.created_by = req.userId;
+            const userRef = await db.admins.findByPk(req.userId);
+            const canViewAll = userRef && userRef.permissions && userRef.permissions.view_all_data;
+            if (!canViewAll) {
+                whereCondition.created_by = req.userId;
+            }
         }
 
         // 2. Fetch Data

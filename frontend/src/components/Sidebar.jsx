@@ -14,20 +14,28 @@ const Sidebar = () => {
 
     const user = authService.getCurrentUser();
 
-    const navItems = [
-        { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/inventory', label: 'Inventory', icon: Diamond },
-        { path: '/sellers', label: 'Sellers', icon: Store },
-        { path: '/invoices', label: 'Invoices', icon: FileText },
-        { path: '/history', label: 'History', icon: Hexagon }, // Reuse Hexagon or other icon
+    // Base Navigation Items
+    let navItems = [
+        { path: '/', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard_view' },
+        { path: '/inventory', label: 'Inventory', icon: Diamond, permission: 'inventory_manage' },
+        { path: '/sellers', label: 'Sellers', icon: Store, permission: 'seller_manage' },
+        { path: '/invoices', label: 'Invoices', icon: FileText, permission: 'invoice_manage' },
+        { path: '/history', label: 'History', icon: Hexagon, permission: 'dashboard_view' },
     ];
 
-    // Add Staff Management for Admins
+    // Filter based on Permissions
+    if (user && user.role !== 'admin') {
+        const perms = user.permissions || {};
+        navItems = navItems.filter(item => {
+            // If no permission requirement, show it (or default to hidden? Safe default is hidden if unknown)
+            if (!item.permission) return true;
+            return perms[item.permission] === true;
+        });
+    }
+
+    // Add Staff Management for Admins ONLY
     if (user && user.role === 'admin') {
-        navItems.push({ path: '/staff', label: 'Manage Staff', icon: Users });
-    } else if (user && !user.role) {
-        // Fallback for old admin without role
-        navItems.push({ path: '/staff', label: 'Manage Staff', icon: Users });
+        navItems.push({ path: '/staff', label: 'Management', icon: Users });
     }
 
     const [showSettings, setShowSettings] = useState(false);

@@ -1,9 +1,78 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../services/api';
-import { Download, Plus, Filter, Wallet, Receipt, Calendar, CreditCard, ChevronRight, X, Check, Edit2, Trash2, Users, Save } from 'lucide-react';
+import { Download, Plus, Filter, Wallet, Receipt, Calendar, CreditCard, ChevronRight, X, Check, Edit2, Trash2, Users, Save, ChevronDown } from 'lucide-react';
 import ExcelGrid from '../components/ExcelGrid';
 import { utils, writeFile } from 'xlsx-js-style';
 import sellerService from '../services/seller.service';
+
+const FilterDropdown = ({ label, options, value, onChange }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef(null);
+
+    // Close on click outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find(o => o.value == value);
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all text-xs font-bold outline-none
+                    ${isOpen ? 'border-indigo-500 ring-2 ring-indigo-500/10 bg-white shadow-sm' : 'border-slate-200 bg-white hover:border-indigo-300'}
+                    ${value ? 'text-indigo-600 bg-indigo-50/50' : 'text-slate-600'}
+                `}
+            >
+                {selectedOption ? selectedOption.label : label}
+                <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''} opacity-50`} />
+            </button>
+
+            {isOpen && (
+                <div className="absolute top-full mt-1 left-0 z-50 w-64 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-100 origin-top-left">
+                    <div className="max-h-64 overflow-y-auto p-1 space-y-0.5 custom-scrollbar">
+                        {/* All / Default Option */}
+                        <div
+                            onClick={() => { onChange(''); setIsOpen(false); }}
+                            className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between transition-colors
+                                ${!value ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}
+                            `}
+                        >
+                            <span>{label}</span>
+                            {!value && <Check size={14} className="text-indigo-600" />}
+                        </div>
+
+                        {options.map((opt) => (
+                            <div
+                                key={opt.value}
+                                onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                                className={`px-3 py-2 rounded-lg text-xs font-bold cursor-pointer flex items-center justify-between transition-colors
+                                    ${value == opt.value ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}
+                                `}
+                            >
+                                <span className="truncate">{opt.label}</span>
+                                {value == opt.value && <Check size={14} className="text-indigo-600" />}
+                            </div>
+                        ))}
+                        {options.length === 0 && (
+                            <div className="px-3 py-4 text-center text-[10px] text-slate-400 font-medium">
+                                No options found
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const SellerList = () => {
     // Data States
@@ -44,7 +113,7 @@ const SellerList = () => {
     useEffect(() => {
         fetchMetadata();
         fetchGridData();
-    }, []);
+    }, [filters]);
 
     const fetchMetadata = async () => {
         try {
@@ -209,11 +278,11 @@ const SellerList = () => {
         { key: 'staff_name', label: 'Staff', width: 120 },
         { key: 'certificate', label: 'Cert No', width: 100 },
         { key: 'shape', label: 'Shape', width: 80 },
-        { key: 'carat', label: 'Cts', width: 60, type: 'number' },
+        { key: 'carat', label: 'Cts', width: 60, type: 'number', aggregate: 'sum' },
         { key: 'rate', label: 'Rate/Ct', width: 90, type: 'currency' },
-        { key: 'buy_price', label: 'Purchase Amt', width: 110, type: 'currency', className: 'font-bold text-slate-700' },
-        { key: 'paid_amount', label: 'Paid', width: 100, type: 'currency', className: 'text-emerald-600' },
-        { key: 'due_amount', label: 'Due', width: 100, type: 'currency', className: 'text-rose-600 font-bold' },
+        { key: 'buy_price', label: 'Purchase Amt', width: 110, type: 'currency', className: 'font-bold text-slate-700', aggregate: 'sum' },
+        { key: 'paid_amount', label: 'Paid', width: 100, type: 'currency', className: 'text-emerald-600', aggregate: 'sum' },
+        { key: 'due_amount', label: 'Due', width: 100, type: 'currency', className: 'text-rose-600 font-bold', aggregate: 'sum' },
         {
             key: 'due_status',
             label: 'Status',
@@ -312,34 +381,33 @@ const SellerList = () => {
                 <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex flex-wrap items-center gap-3">
                     <Filter size={14} className="text-slate-400 mr-1" />
 
-                    <select
-                        className="text-xs font-bold border-slate-200 rounded-md px-2 py-1.5 focus:ring-1 focus:ring-indigo-500 outline-none"
-                        onChange={(e) => setFilters({ ...filters, sellerId: e.target.value ? [e.target.value] : [] })}
+                    <FilterDropdown
+                        label="All Sellers"
+                        options={sellers.map(s => ({
+                            label: `${s.name} ${s.company ? `(${s.company})` : ''}`,
+                            value: s.id
+                        }))}
                         value={filters.sellerId[0] || ''}
-                    >
-                        <option value="">All Sellers</option>
-                        {sellers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.company})</option>)}
-                    </select>
+                        onChange={(val) => setFilters({ ...filters, sellerId: val ? [val] : [] })}
+                    />
 
-                    <select
-                        className="text-xs font-bold border-slate-200 rounded-md px-2 py-1.5 outline-none"
-                        onChange={(e) => setFilters({ ...filters, staffId: e.target.value ? [e.target.value] : [] })}
+                    <FilterDropdown
+                        label="All Staff"
+                        options={staff.map(s => ({ label: s.name, value: s.id }))}
                         value={filters.staffId[0] || ''}
-                    >
-                        <option value="">All Staff</option>
-                        {staff.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
+                        onChange={(val) => setFilters({ ...filters, staffId: val ? [val] : [] })}
+                    />
 
-                    <select
-                        className="text-xs font-bold border-slate-200 rounded-md px-2 py-1.5 outline-none"
-                        onChange={(e) => setFilters({ ...filters, status: e.target.value ? [e.target.value] : [] })}
+                    <FilterDropdown
+                        label="All Status"
+                        options={[
+                            { label: 'Paid', value: 'paid' },
+                            { label: 'Due', value: 'due' },
+                            { label: 'Partial', value: 'partial' }
+                        ]}
                         value={filters.status[0] || ''}
-                    >
-                        <option value="">All Status</option>
-                        <option value="paid">Paid</option>
-                        <option value="due">Due</option>
-                        <option value="partial">Partial</option>
-                    </select>
+                        onChange={(val) => setFilters({ ...filters, status: val ? [val] : [] })}
+                    />
 
                     <div className="h-5 w-px bg-slate-300 mx-1"></div>
 
@@ -349,7 +417,6 @@ const SellerList = () => {
                         <input type="date" className="text-xs border-slate-200 rounded px-2 py-1" value={filters.endDate} onChange={e => setFilters({ ...filters, endDate: e.target.value })} />
                     </div>
 
-                    <button onClick={handleApplyFilters} className="px-3 py-1 bg-indigo-600 text-white rounded text-xs font-bold ml-2">Apply</button>
                     <button onClick={handleClearFilters} className="px-3 py-1 text-slate-500 hover:text-rose-500 text-xs font-bold">Clear</button>
 
                     <button
